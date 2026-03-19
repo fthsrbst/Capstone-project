@@ -156,10 +156,43 @@ function initModeToggle() {
             pentestBtn.classList.remove('bg-primary', 'text-black');
             pentestBtn.classList.add('text-secondary-text', 'hover:text-white');
         }
+        _updateShieldVisibility(mode === 'defense');
     }
 
     pentestBtn.addEventListener('click', () => setMode('pentest'));
     defenseBtn.addEventListener('click', () => setMode('defense'));
+
+    // Initialize: shield hidden on pentest (default)
+    _updateShieldVisibility(false);
+}
+
+function _updateShieldVisibility(show) {
+    // Tab button in expanded intel view
+    const shieldTabBtn = document.querySelector('.intel-tab[data-intel-tab="shield"]');
+    // Nav item in right sidebar
+    const shieldNavItem = document.querySelector('.intel-nav-item[data-panel="shield"]');
+    // Right sidebar panel content
+    const shieldPanel = document.getElementById('intel-panel-shield');
+    // Expanded-view tab body
+    const shieldTabBody = document.querySelector('.intel-tab-body[data-intel-tab="shield"]');
+
+    if (show) {
+        if (shieldTabBtn)  shieldTabBtn.style.display  = '';
+        if (shieldNavItem) shieldNavItem.style.display = '';
+        if (shieldPanel)   shieldPanel.classList.remove('hidden');
+        if (shieldTabBody) shieldTabBody.classList.remove('hidden');
+    } else {
+        if (shieldTabBtn)  shieldTabBtn.style.display  = 'none';
+        if (shieldNavItem) shieldNavItem.style.display = 'none';
+        // If the shield panel is currently visible, switch to analysis first
+        if (shieldPanel && !shieldPanel.classList.contains('hidden')) {
+            switchIntelPanel('analysis');
+        }
+        if (shieldPanel) shieldPanel.classList.add('hidden');
+        if (shieldTabBody && !shieldTabBody.classList.contains('hidden')) {
+            shieldTabBody.classList.add('hidden');
+        }
+    }
 }
 
 // ─── Right Sidebar Intelligence Nav ─────────────────────────────────────────
@@ -398,10 +431,15 @@ function initThemeToggle() {
             }
         };
 
-        if (document.startViewTransition) {
-            document.startViewTransition(applyToggle);
-        } else {
+        const afterToggle = () => {
             applyToggle();
+            scheduleMinimapUpdate();
+        };
+
+        if (document.startViewTransition) {
+            document.startViewTransition(afterToggle);
+        } else {
+            afterToggle();
         }
     });
 }
@@ -532,6 +570,164 @@ function initScrollTracking() {
         const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
         autoScroll = atBottom;
     });
+}
+
+// ─── Agent feed scroll control ────────────────────────────────────────────────
+
+let agentAutoScroll = true;
+
+function initAgentScrollTracking() {
+    const el = document.getElementById('agent-scroll-area');
+    if (!el) return;
+    el.addEventListener('scroll', () => {
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        agentAutoScroll = atBottom;
+        _updateScrollBtn();
+        _updateMinimap();
+    });
+
+    // Minimap click → navigate
+    const minimap = document.getElementById('agent-minimap');
+    if (minimap) {
+        minimap.addEventListener('click', e => {
+            const rect = minimap.getBoundingClientRect();
+            const ratio = (e.clientY - rect.top) / rect.height;
+            el.scrollTop = ratio * el.scrollHeight;
+        });
+        // Drag on minimap
+        let _dragging = false;
+        minimap.addEventListener('mousedown', () => { _dragging = true; });
+        window.addEventListener('mousemove', e => {
+            if (!_dragging) return;
+            const rect = minimap.getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            el.scrollTop = ratio * el.scrollHeight;
+        });
+        window.addEventListener('mouseup', () => { _dragging = false; });
+    }
+}
+
+function _updateScrollBtn() {
+    const btn = document.getElementById('agent-scroll-btn');
+    if (!btn) return;
+    btn.style.display = agentAutoScroll ? 'none' : 'flex';
+}
+
+function agentForceScrollToBottom() {
+    const el = document.getElementById('agent-scroll-area');
+    if (el) el.scrollTop = el.scrollHeight;
+    agentAutoScroll = true;
+    _updateScrollBtn();
+}
+
+// ─── Agent Minimap ────────────────────────────────────────────────────────────
+
+let _minimapDirty = false;
+let _minimapRaf = null;
+
+function scheduleMinimapUpdate() {
+    if (_minimapRaf) return;
+    _minimapRaf = requestAnimationFrame(() => {
+        _minimapRaf = null;
+        _updateMinimap();
+    });
+}
+
+function _updateMinimap() {
+    const canvas  = document.getElementById('agent-minimap-canvas');
+    const scrollEl = document.getElementById('agent-scroll-area');
+    const feed    = document.getElementById('mission-feed');
+    const vp      = document.getElementById('agent-minimap-vp');
+    if (!canvas || !scrollEl) return;
+
+    const container = document.getElementById('agent-minimap');
+    const dpr = window.devicePixelRatio || 1;
+    const cw  = container.offsetWidth;
+    const ch  = container.offsetHeight;
+    if (cw === 0 || ch === 0) return;
+
+    canvas.width  = cw * dpr;
+    canvas.height = ch * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const isLight = document.documentElement.classList.contains('light');
+    const bgColor = isLight ? '#f0f0f1' : '#050505';
+
+    // Clear canvas
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, cw, ch);
+
+    // No cards → empty minimap, hide viewport indicator
+    const cards = feed ? Array.from(feed.children) : [];
+    if (cards.length === 0) {
+        if (vp) vp.style.height = '0';
+        return;
+    }
+
+    const totalH = scrollEl.scrollHeight;
+    if (totalH > 0) {
+        for (const card of cards) {
+            const topPct  = card.offsetTop / totalH;
+            const htPct   = card.offsetHeight / totalH;
+            const y = topPct * ch;
+            const h = Math.max(1.5, htPct * ch);
+
+            // Colour by card semantic type
+            const html = card.innerHTML;
+            let color;
+            if (isLight) {
+                if (html.includes('REASONING') || html.includes('llm-thinking'))
+                    color = 'rgba(74,124,0,0.5)';
+                else if (html.includes('TOOL CALL') || html.includes('tool-call'))
+                    color = 'rgba(37,99,235,0.5)';
+                else if (html.includes('RESULT') || html.includes('tool-result'))
+                    color = 'rgba(22,163,74,0.45)';
+                else if (html.includes('EXPLOIT') || html.includes('text-danger') || html.includes('border-danger'))
+                    color = 'rgba(220,38,38,0.5)';
+                else if (html.includes('REFLECTING') || html.includes('reflection'))
+                    color = 'rgba(147,51,234,0.45)';
+                else if (html.includes('MISSION COMPLETE') || html.includes('generate_report'))
+                    color = 'rgba(74,124,0,0.7)';
+                else
+                    color = 'rgba(0,0,0,0.08)';
+            } else {
+                if (html.includes('REASONING') || html.includes('llm-thinking'))
+                    color = 'rgba(200,255,0,0.55)';
+                else if (html.includes('TOOL CALL') || html.includes('tool-call'))
+                    color = 'rgba(59,130,246,0.6)';
+                else if (html.includes('RESULT') || html.includes('tool-result'))
+                    color = 'rgba(34,197,94,0.5)';
+                else if (html.includes('EXPLOIT') || html.includes('text-danger') || html.includes('border-danger'))
+                    color = 'rgba(239,68,68,0.55)';
+                else if (html.includes('REFLECTING') || html.includes('reflection'))
+                    color = 'rgba(168,85,247,0.5)';
+                else if (html.includes('MISSION COMPLETE') || html.includes('generate_report'))
+                    color = 'rgba(200,255,0,0.8)';
+                else
+                    color = 'rgba(255,255,255,0.07)';
+            }
+
+            ctx.fillStyle = color;
+            ctx.fillRect(3, y, cw - 6, h - 0.5);
+        }
+    }
+
+    // Thin vertical accent line on left edge
+    ctx.fillStyle = isLight ? 'rgba(74,124,0,0.1)' : 'rgba(200,255,0,0.08)';
+    ctx.fillRect(0, 0, 1, ch);
+
+    // Viewport indicator
+    if (vp && totalH > 0) {
+        const scrollRatio = scrollEl.scrollTop / totalH;
+        const viewRatio   = scrollEl.clientHeight / totalH;
+        const vpTop    = scrollRatio * ch;
+        const vpHeight = Math.max(16, viewRatio * ch);
+        vp.style.top    = vpTop + 'px';
+        vp.style.height = vpHeight + 'px';
+        vp.style.background = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(200,255,0,0.06)';
+    }
 }
 
 // ─── Confirm Dialog ───────────────────────────────────────────────────────────
@@ -2158,6 +2354,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initCloudModelDropdown();
     initConfigSave();
     initScrollTracking();
+    initAgentScrollTracking();
+    window.addEventListener('resize', scheduleMinimapUpdate);
     loadPersistedSettings();
     initConversations();
     wsConnect();
@@ -2256,10 +2454,12 @@ function handleSessionEvent(msg) {
         }
 
     } else if (event === 'llm_thinking_start') {
+        _closeToolBatch();
         setAgentStatus('reasoning');
         startAgentStreamCard('thinking');
 
     } else if (event === 'llm_reflecting_start') {
+        _closeToolBatch();
         setAgentStatus('reflecting');
         startAgentStreamCard('reflecting');
 
@@ -2267,6 +2467,7 @@ function handleSessionEvent(msg) {
         appendAgentStreamToken(data.token || '');
 
     } else if (event === 'reasoning') {
+        _closeToolBatch();
         setAgentStatus('reasoning', data.action ? `→ ${data.action}` : '');
         finalizeAgentStreamCard();
         renderMissionReasoning(data);
@@ -2279,12 +2480,12 @@ function handleSessionEvent(msg) {
     } else if (event === 'tool_call') {
         const toolName = data.tool || data.tool_name || data.action || '';
         setAgentStatus('acting', toolName);
-        renderMissionToolCall(data);
+        _openOrAddToToolBatch(data);
         appendConsoleToolCall(data);
 
     } else if (event === 'tool_result') {
         setAgentStatus('reasoning');
-        renderMissionToolResult(data);
+        if (!_resolveToolBatchItem(data)) renderMissionToolResult(data); // fallback for replays
         appendConsoleToolResult(data);
         // Feed intel panels
         if (data.tool === 'searchsploit_search' && data.success) {
@@ -2541,6 +2742,8 @@ async function startMission() {
         setPhaseActive(1);
         clearConsoleOutput();
         clearMissionFeed();
+        agentAutoScroll = true;
+        _updateScrollBtn();
         resetAnalysisPanel(target);
         resetNetworkPanel(target);
         renderMissionStart(target, mode);
@@ -4060,6 +4263,10 @@ function appendConsoleToolResult(data) {
 // ─── Agent view live mission feed ─────────────────────────────────────────────
 
 let _missionIteration = 0;
+let _toolBatch       = null;  // current open tool-batch container
+let _toolBatchUid    = 0;     // ever-incrementing item uid
+const _toolDetailStore = new Map(); // storeId → raw data object (avoids HTML-encoding issues)
+let _toolDetailStoreId = 0;
 
 function _esc(str) {
     return String(str || '')
@@ -4067,6 +4274,193 @@ function _esc(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+// ─── Tool detail modal ────────────────────────────────────────────────────────
+
+function showToolDetail(btn) {
+    const card = btn.closest('[data-tool-id]');
+    if (!card) return;
+    const sid   = parseInt(card.getAttribute('data-tool-id'), 10);
+    const title = card.getAttribute('data-tool-title') || 'Details';
+    const data  = _toolDetailStore.get(sid);
+    const titleEl   = document.getElementById('tool-detail-title');
+    const contentEl = document.getElementById('tool-detail-content');
+    const modal     = document.getElementById('tool-detail-modal');
+    if (!modal || !contentEl) return;
+    if (titleEl) titleEl.textContent = title;
+    contentEl.textContent = data !== undefined ? JSON.stringify(data, null, 2) : '(no data)';
+    modal.classList.remove('hidden');
+}
+
+function toggleThinkExpand(btn) {
+    const card   = btn.closest('.think-card');
+    const expand = card ? card.querySelector('.think-expand') : null;
+    if (!expand) return;
+    const isOpen = expand.style.maxHeight && expand.style.maxHeight !== '0px' && expand.style.maxHeight !== '0';
+    if (isOpen) {
+        expand.style.maxHeight = '0';
+        const ic = btn.querySelector('.material-symbols-outlined');
+        if (ic) ic.textContent = 'expand_more';
+    } else {
+        expand.style.maxHeight = Math.max(expand.scrollHeight, 60) + 'px';
+        const ic = btn.querySelector('.material-symbols-outlined');
+        if (ic) ic.textContent = 'expand_less';
+    }
+}
+
+function closeToolDetailModal() {
+    const modal = document.getElementById('tool-detail-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Render tool params as key-value rows (no raw JSON)
+function _renderToolParams(params) {
+    if (!params || typeof params !== 'object') return '';
+    const entries = Object.entries(params);
+    if (entries.length === 0) return `<span class="text-secondary-text/40 text-[11px]">no params</span>`;
+    return entries.map(([k, v]) => {
+        const val = typeof v === 'string' ? v : JSON.stringify(v);
+        return `<div class="flex gap-2 min-w-0 mb-0.5">
+            <span class="text-blue-400/70 shrink-0 text-[11px] font-bold">${_esc(k)}</span>
+            <span class="text-secondary-text text-[11px] break-all">${_esc(val)}</span>
+        </div>`;
+    }).join('');
+}
+
+// ─── Tool Batch Grouping ──────────────────────────────────────────────────────
+
+function _getToolStyle(toolName) {
+    const n = (toolName || '').toLowerCase();
+    if (n.includes('nmap'))                          return { icon:'wifi_find',     label:'NMAP',        border:'border-blue-500/50',   header:'text-blue-400/80',   spin:'border-blue-400/50'   };
+    if (n.includes('bash')||n==='exec'||n==='run_command'||n==='shell') return { icon:'terminal',      label:'BASH',        border:'border-green-500/50',  header:'text-green-400/80',  spin:'border-green-400/50'  };
+    if (n.includes('python'))                        return { icon:'code',          label:'PYTHON',      border:'border-yellow-500/50', header:'text-yellow-400/80', spin:'border-yellow-400/50' };
+    if (n.includes('msf')||n.includes('metasploit')) return { icon:'rocket_launch', label:'METASPLOIT',  border:'border-red-500/50',    header:'text-red-400/80',    spin:'border-red-400/50'    };
+    if (n.includes('searchsploit'))                  return { icon:'manage_search', label:'SEARCHSPLOIT',border:'border-orange-500/50', header:'text-orange-400/80', spin:'border-orange-400/50' };
+    if (n.includes('hydra')||n.includes('brute'))    return { icon:'key',           label:'HYDRA',       border:'border-purple-500/50', header:'text-purple-400/80', spin:'border-purple-400/50' };
+    if (n.includes('sqlmap')||n.includes('sql'))     return { icon:'storage',       label:'SQLMAP',      border:'border-orange-500/50', header:'text-orange-400/80', spin:'border-orange-400/50' };
+    if (n.includes('curl')||n.includes('http')||n.includes('web')) return { icon:'http', label:'HTTP',   border:'border-cyan-500/50',   header:'text-cyan-400/80',   spin:'border-cyan-400/50'   };
+    if (n.includes('nikto')||n.includes('dirb')||n.includes('gobuster')) return { icon:'travel_explore', label:toolName.toUpperCase().slice(0,12), border:'border-teal-500/50', header:'text-teal-400/80', spin:'border-teal-400/50' };
+    return { icon:'terminal', label:toolName.toUpperCase().slice(0,12)||'TOOL', border:'border-blue-500/50', header:'text-blue-400/80', spin:'border-blue-400/50' };
+}
+
+function _toolCallSummary(tool, params) {
+    if (!params || typeof params !== 'object') return tool;
+    const cmd = params.command || params.cmd || params.command_line;
+    if (cmd) return String(cmd).slice(0, 120);
+    const target = params.target || params.host || params.ip || params.url || params.address;
+    const args   = params.flags  || params.options || params.args || params.arguments || '';
+    if (target) return (args ? `${target} ${args}` : String(target)).slice(0, 120);
+    const mod = params.module || params.exploit || params.payload;
+    if (mod) return String(mod).slice(0, 120);
+    const first = Object.values(params).find(v => typeof v === 'string');
+    return first ? first.slice(0, 120) : tool;
+}
+
+function _resultSummary(output) {
+    if (!output) return '';
+    return output.trim().split('\n').filter(l => l.trim()).slice(0, 2).join(' · ').slice(0, 140);
+}
+
+function _closeToolBatch() { _toolBatch = null; }
+
+function _openOrAddToToolBatch(data) {
+    const tool  = data.tool || '';
+    const style = _getToolStyle(tool);
+    const uid   = _toolBatchUid++;
+
+    if (!_toolBatch) {
+        const feed = getMissionFeed();
+        if (!feed) return uid;
+        const bId = `tb${uid}`;
+        const wrapperEl = document.createElement('div');
+        wrapperEl.className = 'tool-batch-card';
+        wrapperEl.innerHTML = `
+            <div class="border-l-2 ${style.border} bg-surface font-mono text-xs overflow-hidden">
+                <div class="flex items-center gap-2 px-4 py-2 border-b border-border-color/30">
+                    <span class="material-symbols-outlined text-[14px] ${style.header}">${style.icon}</span>
+                    <span class="${style.header} font-bold text-[11px] uppercase tracking-widest" id="${bId}-label">${style.label}</span>
+                    <span class="ml-auto text-secondary-text/40 text-[10px]" id="${bId}-count">1 run</span>
+                </div>
+                <div id="${bId}-list" class="divide-y divide-border-color/20"></div>
+            </div>`;
+        feed.appendChild(wrapperEl);
+        _toolBatch = {
+            wrapperEl,
+            listEl:   wrapperEl.querySelector(`#${bId}-list`),
+            countEl:  wrapperEl.querySelector(`#${bId}-count`),
+            labelEl:  wrapperEl.querySelector(`#${bId}-label`),
+            borderEl: wrapperEl.querySelector('.border-l-2'),
+            pendingQueue: [],
+            toolSet: new Set([tool]),
+            style
+        };
+        if (agentAutoScroll) { const s = document.getElementById('agent-scroll-area'); if(s) s.scrollTop = s.scrollHeight; }
+    } else {
+        _toolBatch.toolSet.add(tool);
+        if (_toolBatch.toolSet.size > 1 && _toolBatch.labelEl) _toolBatch.labelEl.textContent = 'TOOLS';
+    }
+
+    const summary = _esc(_toolCallSummary(tool, data.params || {}));
+    const sid     = _toolDetailStoreId++;
+    _toolDetailStore.set(sid, data);
+    const itemEl  = document.createElement('div');
+    itemEl.id = `tbitem-${uid}`;
+    itemEl.className = 'group/item flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors';
+    itemEl.setAttribute('data-tool-id', sid);
+    itemEl.setAttribute('data-tool-title', `${_esc(tool)} · details`);
+    itemEl.innerHTML = `
+        <div class="shrink-0 mt-0.5 w-4 h-4 flex items-center justify-center" id="tbstatus-${uid}">
+            <div class="w-3 h-3 border ${_toolBatch.style.spin} border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 mb-0.5">
+                <span class="text-[10px] ${_toolBatch.style.header} font-bold uppercase tracking-wide">${_esc(tool)}</span>
+            </div>
+            <div class="text-secondary-text/70 text-[11px] break-all line-clamp-1">${summary}</div>
+            <div class="text-secondary-text/40 text-[10px] mt-0.5 break-all line-clamp-2 hidden" id="tbresult-${uid}"></div>
+        </div>
+        <button onclick="showToolDetail(this)"
+            class="shrink-0 mt-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity text-secondary-text/50 hover:text-primary">
+            <span class="material-symbols-outlined text-[13px]">info</span>
+        </button>`;
+    _toolBatch.listEl.appendChild(itemEl);
+
+    const n = _toolBatch.listEl.children.length;
+    if (_toolBatch.countEl) _toolBatch.countEl.textContent = `${n} run${n!==1?'s':''}`;
+    _toolBatch.pendingQueue.push({ uid, tool, callData: data });
+
+    if (agentAutoScroll) { const s = document.getElementById('agent-scroll-area'); if(s) s.scrollTop = s.scrollHeight; }
+    scheduleMinimapUpdate();
+    return uid;
+}
+
+function _resolveToolBatchItem(data) {
+    if (!_toolBatch || !_toolBatch.pendingQueue.length) return false;
+    const pending = _toolBatch.pendingQueue.shift();
+    const uid     = pending.uid;
+    const success = data.success !== false;
+    const output  = data.output || data.error || '';
+    const summary = _resultSummary(output);
+
+    const statusEl = document.getElementById(`tbstatus-${uid}`);
+    if (statusEl) {
+        const ic = success ? 'check_circle' : 'error';
+        const cl = success ? 'text-primary'  : 'text-danger';
+        statusEl.innerHTML = `<span class="material-symbols-outlined text-[15px] ${cl}" style="font-variation-settings:'FILL' 1;">${ic}</span>`;
+    }
+    const resultEl = document.getElementById(`tbresult-${uid}`);
+    if (resultEl && summary) { resultEl.textContent = summary; resultEl.classList.remove('hidden'); }
+
+    const itemEl = document.getElementById(`tbitem-${uid}`);
+    if (itemEl) {
+        const sid = parseInt(itemEl.getAttribute('data-tool-id'), 10);
+        _toolDetailStore.set(sid, { call: pending.callData, result: data });
+        itemEl.setAttribute('data-tool-title', `${_esc(data.tool||'')} · call + result`);
+    }
+    if (agentAutoScroll) { const s = document.getElementById('agent-scroll-area'); if(s) s.scrollTop = s.scrollHeight; }
+    scheduleMinimapUpdate();
+    return true;
 }
 
 function getMissionFeed() {
@@ -4091,22 +4485,27 @@ function appendMissionCard(html) {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = html.trim();
     if (wrapper.firstChild) feed.appendChild(wrapper.firstChild);
-    // Scroll the overflow parent
-    const stream = document.getElementById('message-stream');
-    const scrollEl = stream ? stream.parentElement : null;
-    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    // Only auto-scroll if the user hasn't manually scrolled up
+    if (agentAutoScroll) {
+        const scrollEl = document.getElementById('agent-scroll-area');
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    }
+    scheduleMinimapUpdate();
 }
 
 function clearMissionFeed() {
     const feed = document.getElementById('mission-feed');
     if (feed) feed.remove();
     _missionIteration = 0;
+    _toolBatch = null;
+    _toolDetailStore.clear();
     const emptyState = document.getElementById('agent-empty-state');
     if (emptyState) emptyState.style.display = '';
     // Clear objectives panel
     const op = document.getElementById('objectives-panel');
     if (op) op.remove();
     _objectivesState = [];
+    scheduleMinimapUpdate();
 }
 
 // ── Objectives Panel ──────────────────────────────────────────────────────────
@@ -4181,36 +4580,67 @@ function renderMissionStart(target, mode) {
 
 // ── Agent LLM Streaming ──────────────────────────────────────────────────────
 
-let _agentStreamEl = null;   // the live streaming card element
-let _agentStreamBody = null; // the <pre> inside it that receives tokens
+let _agentStreamEl   = null;  // the live streaming card element
+let _agentStreamBody = null;  // the <pre> inside it that receives tokens
+let _agentStreamMode = null;  // 'thinking' | 'reflecting'
 
 function startAgentStreamCard(mode) {
-    finalizeAgentStreamCard(); // close any previous open card
-    const isReflect = mode === 'reflecting';
+    finalizeAgentStreamCard();
+    _agentStreamMode  = mode;
+    const isReflect   = mode === 'reflecting';
     const borderColor = isReflect ? 'border-purple-500/40' : 'border-yellow-500/30';
-    const labelColor  = isReflect ? 'text-purple-400/70' : 'text-yellow-400/70';
-    const icon        = isReflect ? 'lightbulb' : 'psychology';
-    const label       = isReflect ? 'REFLECTING' : 'THINKING';
+    const labelColor  = isReflect ? 'text-purple-400/70'   : 'text-yellow-400/70';
+    const icon        = isReflect ? 'lightbulb'             : 'psychology';
+    const label       = isReflect ? 'REFLECTING'            : 'THINKING';
+
+    const dots = `<span class="flex items-center gap-[3px] ml-1.5" id="agent-stream-cursor">
+        <span class="w-[5px] h-[5px] rounded-full bg-current" style="animation:thinking-dot 1.2s ease-in-out infinite;animation-delay:0ms"></span>
+        <span class="w-[5px] h-[5px] rounded-full bg-current" style="animation:thinking-dot 1.2s ease-in-out infinite;animation-delay:200ms"></span>
+        <span class="w-[5px] h-[5px] rounded-full bg-current" style="animation:thinking-dot 1.2s ease-in-out infinite;animation-delay:400ms"></span>
+    </span>`;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'mission-card-wrapper';
-    wrapper.innerHTML = `
-        <div class="border-l-2 ${borderColor} bg-surface pl-4 pr-4 py-3 font-mono text-xs">
-            <div class="flex items-center gap-2 ${labelColor} font-bold text-[10px] uppercase tracking-widest mb-2">
-                <span class="material-symbols-outlined text-[13px]">${icon}</span>
-                ${label}
-                <span class="inline-block w-1.5 h-3 bg-current ml-1 animate-pulse" id="agent-stream-cursor"></span>
-            </div>
-            <pre id="agent-stream-body" class="text-secondary-text text-[10px] leading-relaxed whitespace-pre-wrap break-all max-h-64 overflow-y-auto"></pre>
-        </div>`;
+
+    if (isReflect) {
+        // Reflecting: keep card visible after finalization — button to expand
+        wrapper.innerHTML = `
+            <div class="think-card border-l-2 ${borderColor} bg-surface font-mono text-xs">
+                <div class="flex items-center gap-2 ${labelColor} font-bold text-[11px] uppercase tracking-widest pl-4 pr-4 py-2.5">
+                    <span class="material-symbols-outlined text-[14px] animate-pulse">${icon}</span>
+                    ${label}
+                    ${dots}
+                    <button onclick="toggleThinkExpand(this)" title="Toggle detail"
+                        class="ml-auto flex items-center gap-1 ${labelColor} opacity-60 hover:opacity-100 transition-opacity px-1 py-0.5">
+                        <span class="material-symbols-outlined text-[15px]">expand_more</span>
+                    </button>
+                </div>
+                <div class="think-expand overflow-hidden pl-4 pr-4" style="max-height:0;transition:max-height 0.3s ease-out;">
+                    <pre id="agent-stream-body" class="text-secondary-text/70 text-[11px] italic leading-relaxed whitespace-pre-wrap break-all pb-3 max-h-72 overflow-y-auto"></pre>
+                </div>
+            </div>`;
+    } else {
+        // Thinking: card will be removed on finalization; just show animated header
+        wrapper.innerHTML = `
+            <div class="border-l-2 ${borderColor} bg-surface pl-4 pr-4 py-2.5 font-mono text-xs">
+                <div class="flex items-center gap-2 ${labelColor} font-bold text-[11px] uppercase tracking-widest">
+                    <span class="material-symbols-outlined text-[14px] animate-pulse">${icon}</span>
+                    ${label}
+                    ${dots}
+                </div>
+                <pre id="agent-stream-body" class="sr-only"></pre>
+            </div>`;
+    }
 
     const feed = getMissionFeed();
     if (feed) {
         feed.appendChild(wrapper);
-        _agentStreamEl = wrapper;
+        _agentStreamEl   = wrapper;
         _agentStreamBody = wrapper.querySelector('#agent-stream-body');
-        const scrollEl = document.getElementById('message-stream');
-        if (scrollEl && scrollEl.parentElement) scrollEl.parentElement.scrollTop = scrollEl.parentElement.scrollHeight;
+        if (agentAutoScroll) {
+            const scrollEl = document.getElementById('agent-scroll-area');
+            if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+        }
     }
 }
 
@@ -4219,56 +4649,93 @@ function appendAgentStreamToken(token) {
     _agentStreamBody.textContent += token;
     // Auto-scroll the card itself if it's overflowing
     _agentStreamBody.scrollTop = _agentStreamBody.scrollHeight;
-    // Auto-scroll the page
-    const scrollEl = document.getElementById('message-stream');
-    if (scrollEl && scrollEl.parentElement) scrollEl.parentElement.scrollTop = scrollEl.parentElement.scrollHeight;
+    // Auto-scroll the page only if user hasn't scrolled up
+    if (agentAutoScroll) {
+        const scrollEl = document.getElementById('agent-scroll-area');
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    }
 }
 
 function finalizeAgentStreamCard() {
     if (!_agentStreamEl) return;
-    // Remove the blinking cursor
-    const cursor = _agentStreamEl.querySelector('#agent-stream-cursor');
-    if (cursor) cursor.remove();
-    _agentStreamEl = null;
+    if (_agentStreamMode === 'thinking') {
+        // Remove the temp streaming card — renderMissionReasoning will show clean parsed card
+        _agentStreamEl.remove();
+    } else {
+        // Reflecting: keep the card, just remove the animated dots cursor
+        const cursor = _agentStreamEl.querySelector('#agent-stream-cursor');
+        if (cursor) cursor.remove();
+        // Fix expand height now that content is final
+        const expand = _agentStreamEl.querySelector('.think-expand');
+        if (expand && expand.style.maxHeight !== '0px' && expand.style.maxHeight !== '0') {
+            expand.style.maxHeight = expand.scrollHeight + 'px';
+        }
+    }
+    _agentStreamEl   = null;
     _agentStreamBody = null;
+    _agentStreamMode = null;
 }
 
 function renderMissionReasoning(data) {
     _missionIteration++;
-    const iter = _missionIteration;
-    const thought   = _esc(data.thought || '');
+    const iter      = _missionIteration;
+    const thought   = _esc(data.thought   || '');
     const reasoning = _esc(data.reasoning || '');
-    const action    = _esc(data.action || '');
+    const action    = _esc(data.action    || '');
+    // Short preview shown in collapsed header (first ~70 chars of thought)
+    const preview   = thought ? thought.slice(0, 72) + (thought.length > 72 ? '…' : '') : '';
+
+    const bodyHtml = [
+        thought   ? `<p class="text-slate-300/80 text-[12px] italic leading-relaxed whitespace-pre-wrap mb-2">${thought}</p>` : '',
+        reasoning ? `<p class="text-secondary-text/70 text-[11px] italic leading-relaxed whitespace-pre-wrap mb-2">${reasoning}</p>` : '',
+        action    ? `<p class="text-primary text-[11px] font-bold mt-1 not-italic">→ &nbsp;${action}</p>` : '',
+    ].filter(Boolean).join('');
+
     appendMissionCard(`
-        <div class="group/iter border-l-2 border-yellow-500/50 bg-surface pl-4 pr-4 py-3 font-mono text-xs relative" data-iteration="${iter}">
-            <div class="flex items-center gap-2 text-yellow-400/80 font-bold text-[10px] uppercase tracking-widest mb-2">
-                <span class="material-symbols-outlined text-[13px]">psychology</span>
-                REASONING &nbsp;·&nbsp; Iteration ${iter}
-                <button class="iter-fork-btn ml-auto opacity-0 group-hover/iter:opacity-100 transition-opacity flex items-center gap-1 text-[9px] text-secondary-text hover:text-primary cursor-pointer bg-bg/70 rounded px-2 py-0.5"
-                        onclick="forkFromIteration(${iter})"
-                        title="Continue from this checkpoint">
-                    <span class="material-symbols-outlined text-[11px]">fork_right</span>
-                    Continue from here
-                </button>
+        <div class="think-card border-l-2 border-yellow-500/40 bg-surface font-mono text-xs" data-iteration="${iter}">
+            <div class="flex items-center gap-2 pl-4 pr-4 py-2.5 text-yellow-400/70 font-bold text-[11px] uppercase tracking-widest">
+                <span class="material-symbols-outlined text-[14px]">psychology</span>
+                THINKING
+                <span class="text-yellow-400/30 font-normal text-[10px] normal-case tracking-normal truncate max-w-[220px]">${preview}</span>
+                <div class="ml-auto flex items-center gap-2 shrink-0">
+                    <button onclick="forkFromIteration(${iter})" title="Continue from this checkpoint"
+                        class="flex items-center gap-1 text-[10px] text-secondary-text/40 hover:text-primary transition-colors px-1.5 py-0.5">
+                        <span class="material-symbols-outlined text-[12px]">fork_right</span>
+                    </button>
+                    <button onclick="toggleThinkExpand(this)" title="Toggle thinking detail"
+                        class="flex items-center gap-1 text-yellow-400/40 hover:text-yellow-400 transition-colors px-1 py-0.5">
+                        <span class="material-symbols-outlined text-[15px]">expand_more</span>
+                    </button>
+                </div>
             </div>
-            ${thought    ? `<div class="text-slate-300 leading-relaxed mb-2 whitespace-pre-wrap">${thought}</div>` : ''}
-            ${reasoning  ? `<div class="text-secondary-text text-[11px] leading-relaxed mb-2 whitespace-pre-wrap italic">${reasoning}</div>` : ''}
-            ${action     ? `<div class="text-primary text-[11px] font-bold mt-1">→ &nbsp;${action}</div>` : ''}
+            <div class="think-expand overflow-hidden pl-4 pr-4" style="max-height:0;transition:max-height 0.3s ease-out;">
+                <div class="pb-3 border-t border-yellow-500/10 pt-2.5">
+                    ${bodyHtml}
+                </div>
+            </div>
         </div>
     `);
 }
 
 function renderMissionToolCall(data) {
-    const tool      = _esc(data.tool || '');
-    const paramsStr = _esc(JSON.stringify(data.params || {}, null, 2));
+    const tool       = _esc(data.tool || '');
+    const paramsHtml = _renderToolParams(data.params || {});
+    const sid        = _toolDetailStoreId++;
+    _toolDetailStore.set(sid, data);
     appendMissionCard(`
-        <div class="border-l-2 border-blue-500/50 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
-            <div class="flex items-center gap-2 text-blue-400/80 font-bold text-[10px] uppercase tracking-widest mb-2">
-                <span class="material-symbols-outlined text-[13px]">terminal</span>
+        <div class="group/card border-l-2 border-blue-500/50 bg-surface pl-4 pr-4 py-3 font-mono text-xs relative"
+             data-tool-id="${sid}" data-tool-title="TOOL CALL · ${tool}">
+            <div class="flex items-center gap-2 text-blue-400/80 font-bold text-[11px] uppercase tracking-widest mb-2">
+                <span class="material-symbols-outlined text-[14px]">terminal</span>
                 TOOL CALL
             </div>
-            <div class="text-primary font-bold mb-1">▶ &nbsp;${tool}</div>
-            <pre class="text-secondary-text text-[10px] overflow-x-auto whitespace-pre-wrap break-all">${paramsStr}</pre>
+            <div class="text-primary font-bold mb-2 text-[12px]">▶ &nbsp;${tool}</div>
+            <div class="space-y-0.5">${paramsHtml}</div>
+            <button onclick="showToolDetail(this)"
+                class="absolute bottom-2 right-2 opacity-0 group-hover/card:opacity-100 transition-opacity
+                       flex items-center gap-1 text-secondary-text hover:text-blue-400 bg-bg/80 rounded px-1.5 py-0.5 text-[10px]">
+                <span class="material-symbols-outlined text-[13px]">info</span>
+            </button>
         </div>
     `);
 }
@@ -4281,16 +4748,24 @@ function renderMissionToolResult(data) {
     const color   = success ? 'text-primary' : 'text-danger';
     const icon    = success ? 'check_circle' : 'error';
     const label   = success ? 'OK' : 'FAILED';
+    const sid     = _toolDetailStoreId++;
+    _toolDetailStore.set(sid, data);
     appendMissionCard(`
-        <div class="border-l-2 ${border} bg-surface pl-4 pr-4 py-3 font-mono text-xs">
+        <div class="group/card border-l-2 ${border} bg-surface pl-4 pr-4 py-3 font-mono text-xs relative"
+             data-tool-id="${sid}" data-tool-title="RESULT · ${tool}">
             <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2 ${color} font-bold text-[10px] uppercase tracking-widest">
-                    <span class="material-symbols-outlined text-[13px]" style="font-variation-settings:'FILL' 1;">${icon}</span>
+                <div class="flex items-center gap-2 ${color} font-bold text-[11px] uppercase tracking-widest">
+                    <span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1;">${icon}</span>
                     RESULT: ${tool}
                 </div>
-                <span class="${color} font-bold text-[10px]">${label}</span>
+                <span class="${color} font-bold text-[11px]">${label}</span>
             </div>
-            ${output ? `<pre class="text-secondary-text text-[10px] overflow-x-auto max-h-48 whitespace-pre-wrap break-all">${output}</pre>` : ''}
+            ${output ? `<pre class="text-secondary-text text-[11px] overflow-x-auto max-h-48 whitespace-pre-wrap break-all">${output}</pre>` : ''}
+            <button onclick="showToolDetail(this)"
+                class="absolute bottom-2 right-2 opacity-0 group-hover/card:opacity-100 transition-opacity
+                       flex items-center gap-1 text-secondary-text hover:text-primary bg-bg/80 rounded px-1.5 py-0.5 text-[10px]">
+                <span class="material-symbols-outlined text-[13px]">info</span>
+            </button>
         </div>
     `);
 }
@@ -4300,11 +4775,11 @@ function renderMissionReflection(data) {
     if (!content) return;
     appendMissionCard(`
         <div class="border-l-2 border-purple-500/40 bg-surface pl-4 pr-4 py-2 font-mono text-xs">
-            <div class="flex items-center gap-2 text-purple-400/60 font-bold text-[10px] uppercase tracking-widest mb-1">
-                <span class="material-symbols-outlined text-[12px]">lightbulb</span>
+            <div class="flex items-center gap-2 text-purple-400/60 font-bold text-[11px] uppercase tracking-widest mb-1">
+                <span class="material-symbols-outlined text-[14px]">lightbulb</span>
                 REFLECTION
             </div>
-            <div class="text-secondary-text text-[11px] italic leading-relaxed whitespace-pre-wrap">${content}</div>
+            <div class="text-secondary-text text-xs italic leading-relaxed whitespace-pre-wrap">${content}</div>
         </div>
     `);
 }
@@ -4314,11 +4789,11 @@ function renderMissionSafetyBlock(data) {
     const tool   = _esc(data.tool || '');
     appendMissionCard(`
         <div class="border-l-2 border-orange-500/60 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
-            <div class="flex items-center gap-2 text-orange-400 font-bold text-[10px] uppercase tracking-widest mb-1">
-                <span class="material-symbols-outlined text-[13px]">shield</span>
+            <div class="flex items-center gap-2 text-orange-400 font-bold text-[11px] uppercase tracking-widest mb-1">
+                <span class="material-symbols-outlined text-[14px]">shield</span>
                 SAFETY BLOCK${tool ? ' · ' + tool : ''}
             </div>
-            <div class="text-orange-300/80 text-[11px]">${reason}</div>
+            <div class="text-orange-300/80 text-xs">${reason}</div>
         </div>
     `);
 }
@@ -4327,11 +4802,11 @@ function renderMissionError(data) {
     const msg = _esc(data.error || 'Unknown error');
     appendMissionCard(`
         <div class="border-l-2 border-danger/60 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
-            <div class="flex items-center gap-2 text-danger font-bold text-[10px] uppercase tracking-widest mb-1">
-                <span class="material-symbols-outlined text-[13px]">error</span>
+            <div class="flex items-center gap-2 text-danger font-bold text-[11px] uppercase tracking-widest mb-1">
+                <span class="material-symbols-outlined text-[14px]">error</span>
                 ERROR
             </div>
-            <div class="text-danger/80 text-[11px] whitespace-pre-wrap">${msg}</div>
+            <div class="text-danger/80 text-xs whitespace-pre-wrap">${msg}</div>
         </div>
     `);
 }
@@ -4728,14 +5203,15 @@ async function switchToSession(sessionId) {
 function replaySessionEvent(event, data) {
     switch (event) {
         case 'reasoning':
+            _closeToolBatch();
             renderMissionReasoning(data);
             updatePhaseFromEvent(data);
             break;
         case 'tool_call':
-            renderMissionToolCall(data);
+            _openOrAddToToolBatch(data);
             break;
         case 'tool_result':
-            renderMissionToolResult(data);
+            if (!_resolveToolBatchItem(data)) renderMissionToolResult(data);
             break;
         case 'reflection':
             renderMissionReflection(data);
