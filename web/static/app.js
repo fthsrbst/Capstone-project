@@ -78,6 +78,14 @@ function switchView(viewName) {
     currentView = viewName;
     syncInputMode();
 
+    // Restore saved agent sub-view (feed/graph) when switching to agent
+    if (viewName === 'agent') {
+        try {
+            const saved = localStorage.getItem('agView');
+            if (saved === 'graph' || saved === 'feed') switchAgentView(saved);
+        } catch(e) {}
+    }
+
     // Update nav highlight
     document.querySelectorAll('.bottom-nav-item').forEach(item => {
         const view = item.dataset.view;
@@ -590,9 +598,10 @@ function initAgentScrollTracking() {
     const minimap = document.getElementById('agent-minimap');
     if (minimap) {
         minimap.addEventListener('click', e => {
-            const rect = minimap.getBoundingClientRect();
+            const rect  = minimap.getBoundingClientRect();
             const ratio = (e.clientY - rect.top) / rect.height;
-            el.scrollTop = ratio * el.scrollHeight;
+            // Center viewport on clicked position
+            el.scrollTop = ratio * el.scrollHeight - el.clientHeight / 2;
         });
         // Drag on minimap
         let _dragging = false;
@@ -615,7 +624,7 @@ function _updateScrollBtn() {
 
 function agentForceScrollToBottom() {
     const el = document.getElementById('agent-scroll-area');
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     agentAutoScroll = true;
     _updateScrollBtn();
 }
@@ -674,37 +683,55 @@ function _updateMinimap() {
             const y = topPct * ch;
             const h = Math.max(1.5, htPct * ch);
 
-            // Colour by card semantic type
+            // Colour by card semantic type + tool + success state
             const html = card.innerHTML;
+            const hasSuccess = html.includes('check_circle');
+            const hasFail    = html.includes('text-danger') || html.includes('border-danger');
             let color;
             if (isLight) {
-                if (html.includes('REASONING') || html.includes('llm-thinking'))
-                    color = 'rgba(74,124,0,0.5)';
-                else if (html.includes('TOOL CALL') || html.includes('tool-call'))
-                    color = 'rgba(37,99,235,0.5)';
-                else if (html.includes('RESULT') || html.includes('tool-result'))
-                    color = 'rgba(22,163,74,0.45)';
-                else if (html.includes('EXPLOIT') || html.includes('text-danger') || html.includes('border-danger'))
-                    color = 'rgba(220,38,38,0.5)';
-                else if (html.includes('REFLECTING') || html.includes('reflection'))
+                if (html.includes('MISSION COMPLETE'))
+                    color = 'rgba(74,124,0,0.85)';
+                else if (html.includes('psychology') || html.includes('THINKING'))
+                    color = 'rgba(180,150,0,0.55)';
+                else if (html.includes('lightbulb') || html.includes('REFLECTING') || html.includes('REFLECTION'))
                     color = 'rgba(147,51,234,0.45)';
-                else if (html.includes('MISSION COMPLETE') || html.includes('generate_report'))
-                    color = 'rgba(74,124,0,0.7)';
+                else if (html.includes('wifi_find') || html.includes('NMAP'))
+                    color = 'rgba(37,99,235,0.65)';
+                else if (html.includes('rocket_launch') || html.includes('METASPLOIT'))
+                    color = hasSuccess ? 'rgba(220,38,38,0.85)' : 'rgba(220,38,38,0.5)';
+                else if (html.includes('manage_search') || html.includes('SEARCHSPLOIT'))
+                    color = 'rgba(234,88,12,0.6)';
+                else if (html.includes('key') && html.includes('HYDRA'))
+                    color = 'rgba(147,51,234,0.5)';
+                else if (html.includes('border-green-500') || (html.includes('terminal') && html.includes('BASH')))
+                    color = hasSuccess ? 'rgba(22,163,74,0.65)' : 'rgba(22,163,74,0.35)';
+                else if (hasFail)
+                    color = 'rgba(220,38,38,0.55)';
+                else if (hasSuccess)
+                    color = 'rgba(22,163,74,0.5)';
                 else
                     color = 'rgba(0,0,0,0.08)';
             } else {
-                if (html.includes('REASONING') || html.includes('llm-thinking'))
+                if (html.includes('MISSION COMPLETE'))
+                    color = 'rgba(200,255,0,0.85)';
+                else if (html.includes('psychology') || html.includes('THINKING'))
                     color = 'rgba(200,255,0,0.55)';
-                else if (html.includes('TOOL CALL') || html.includes('tool-call'))
-                    color = 'rgba(59,130,246,0.6)';
-                else if (html.includes('RESULT') || html.includes('tool-result'))
-                    color = 'rgba(34,197,94,0.5)';
-                else if (html.includes('EXPLOIT') || html.includes('text-danger') || html.includes('border-danger'))
-                    color = 'rgba(239,68,68,0.55)';
-                else if (html.includes('REFLECTING') || html.includes('reflection'))
-                    color = 'rgba(168,85,247,0.5)';
-                else if (html.includes('MISSION COMPLETE') || html.includes('generate_report'))
-                    color = 'rgba(200,255,0,0.8)';
+                else if (html.includes('lightbulb') || html.includes('REFLECTING') || html.includes('REFLECTION'))
+                    color = 'rgba(168,85,247,0.55)';
+                else if (html.includes('wifi_find') || html.includes('NMAP'))
+                    color = 'rgba(59,130,246,0.75)';
+                else if (html.includes('rocket_launch') || html.includes('METASPLOIT'))
+                    color = hasSuccess ? 'rgba(239,68,68,0.95)' : 'rgba(239,68,68,0.5)';
+                else if (html.includes('manage_search') || html.includes('SEARCHSPLOIT'))
+                    color = 'rgba(249,115,22,0.7)';
+                else if (html.includes('key') && html.includes('HYDRA'))
+                    color = 'rgba(168,85,247,0.55)';
+                else if (html.includes('border-green-500') || (html.includes('terminal') && html.includes('BASH')))
+                    color = hasSuccess ? 'rgba(34,197,94,0.7)' : 'rgba(34,197,94,0.4)';
+                else if (hasFail)
+                    color = 'rgba(239,68,68,0.6)';
+                else if (hasSuccess)
+                    color = 'rgba(34,197,94,0.55)';
                 else
                     color = 'rgba(255,255,255,0.07)';
             }
@@ -1333,7 +1360,7 @@ function buildUserMessageEl(text) {
     el.innerHTML = `
         <div class="flex flex-col gap-1 max-w-[80%] items-end">
           <div class="text-[10px] font-bold text-secondary-text uppercase tracking-widest text-right">You</div>
-          <div class="user-msg-text bg-card border border-border-color p-4 text-sm leading-relaxed whitespace-pre-wrap" style="color:#d1d5db;font-family:'Inter',sans-serif;">${escapeHtml(text)}</div>
+          <div class="user-msg-text bg-card border border-border-color border-r-2 p-4 text-sm leading-relaxed whitespace-pre-wrap" style="color:#d1d5db;font-family:'Inter',sans-serif;border-right-color:#60a5fa;">${escapeHtml(text)}</div>
           <div class="msg-actions flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
             <button class="action-copy msg-action-btn flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-secondary-text hover:text-primary border border-transparent hover:border-border-color transition-all font-display uppercase tracking-wider">
               <span class="material-symbols-outlined text-[13px]">content_copy</span><span>Copy</span>
@@ -1374,7 +1401,7 @@ function buildAssistantMessageEl(htmlContent, rawText = '') {
         </div>
         <div class="flex flex-col gap-1 flex-1 min-w-0">
           <div class="text-[10px] font-bold text-secondary-text uppercase tracking-widest">AI Engine • Chat</div>
-          <div class="bg-surface border-l-2 border-l-primary border border-border-color p-5">
+          <div class="bg-surface border-l-4 border-l-primary border border-border-color p-5">
             <div class="msg-text markdown-content text-sm leading-relaxed text-slate-200">${htmlContent}</div>
           </div>
           <div class="msg-actions flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
@@ -1414,7 +1441,7 @@ function startAssistantMessage() {
         </div>
         <div class="flex flex-col gap-1 flex-1 min-w-0">
           <div class="text-[10px] font-bold text-secondary-text uppercase tracking-widest">AI Engine • Chat</div>
-          <div class="bg-surface border-l-2 border-l-primary border border-border-color p-5">
+          <div class="bg-surface border-l-4 border-l-primary border border-border-color p-5">
             <div class="msg-text markdown-content text-sm leading-relaxed"></div>
             <span class="cursor-blink inline-block w-2 h-4 bg-primary ml-0.5 align-middle"></span>
           </div>
@@ -1606,8 +1633,8 @@ function initChatInput() {
             const data = await res.json();
             if (data.ok) {
                 appendMissionCard(`
-                    <div class="border-l-2 border-yellow-500/50 bg-surface pl-4 pr-4 py-2 font-mono text-xs">
-                        <div class="flex items-center gap-2 text-yellow-400/80 font-bold text-[10px] uppercase tracking-widest mb-1">
+                    <div class="bg-surface pl-4 pr-4 py-2 font-mono text-xs" style="border:1px solid rgba(234,179,8,0.35);border-left:4px solid #eab308;">
+                        <div class="flex items-center gap-2 text-yellow-400 font-bold text-[10px] uppercase tracking-widest mb-1">
                             <span class="material-symbols-outlined text-[12px]">person</span>
                             OPERATOR INSTRUCTION
                         </div>
@@ -2446,6 +2473,7 @@ function handleSessionEvent(msg) {
         if (!data.resuming) {
             clearMissionFeed();
             renderMissionStart(data.target || '', data.mode || '');
+            agOnMissionStart(data);
         }
         appendConsoleLine(`[START] Target: ${data.target || ''} · Mode: ${data.mode || ''}`, 'text-primary');
         // Initialize objectives tracker from start event
@@ -2472,6 +2500,7 @@ function handleSessionEvent(msg) {
         finalizeAgentStreamCard();
         renderMissionReasoning(data);
         updatePhaseFromEvent(data);
+        agOnThinking(data);
         appendConsoleLine(`[THINK] ${data.thought || data.action || ''}`, 'text-secondary-text');
         if (data.action) {
             appendConsoleLine(`[ACTION] → ${data.action}`, 'text-slate-400');
@@ -2481,11 +2510,13 @@ function handleSessionEvent(msg) {
         const toolName = data.tool || data.tool_name || data.action || '';
         setAgentStatus('acting', toolName);
         _openOrAddToToolBatch(data);
+        agOnToolCall(data);
         appendConsoleToolCall(data);
 
     } else if (event === 'tool_result') {
         setAgentStatus('reasoning');
         if (!_resolveToolBatchItem(data)) renderMissionToolResult(data); // fallback for replays
+        agOnToolResult(data);
         appendConsoleToolResult(data);
         // Feed intel panels
         if (data.tool === 'searchsploit_search' && data.success) {
@@ -2495,6 +2526,7 @@ function handleSessionEvent(msg) {
     } else if (event === 'reflection') {
         setAgentStatus('reflecting');
         finalizeAgentStreamCard();
+        agOnReflection(data);
         // Streaming card already shows the full reflection content — skip duplicate static card
         if (data.content) {
             appendConsoleLine(`[REFLECT] ${data.content.slice(0, 120)}`, 'text-purple-400');
@@ -2512,9 +2544,11 @@ function handleSessionEvent(msg) {
         const tools = (data.tools || []).join(', ');
         setAgentStatus('acting', `⚡ parallel ×${data.count}`);
         appendConsoleLine(`[PARALLEL] Starting ${data.count} tools simultaneously: ${tools}`, 'text-yellow-400');
+        agOnParallelStart(data);
 
     } else if (event === 'parallel_done') {
         appendConsoleLine(`[PARALLEL] ${data.count} tools completed`, 'text-green-400');
+        agOnParallelDone(data);
 
     } else if (event === 'phase_change' || event === 'discovery') {
         updatePhaseFromEvent(data);
@@ -2577,8 +2611,8 @@ function handleSessionEvent(msg) {
     } else if (event === 'operator_response') {
         const thought = data.thought || '';
         appendMissionCard(`
-            <div class="border-l-2 border-primary/60 bg-primary/5 pl-4 pr-4 py-3 font-mono text-xs">
-                <div class="flex items-center gap-2 text-primary/80 font-bold text-[10px] uppercase tracking-widest mb-1.5">
+            <div class="bg-primary/5 pl-4 pr-4 py-3 font-mono text-xs" style="border:1px solid rgba(204,255,0,0.35);border-left:4px solid #ccff00;">
+                <div class="flex items-center gap-2 text-primary font-bold text-[10px] uppercase tracking-widest mb-1.5">
                     <span class="material-symbols-outlined text-[13px]" style="font-variation-settings:'FILL' 1;">smart_toy</span>
                     AGENT RESPONSE TO OPERATOR
                 </div>
@@ -2635,10 +2669,14 @@ function handleSessionDone(msg) {
     syncInputMode();
     showToast('Mission complete');
     renderMissionDone({
-        hosts: counts.hosts,
-        vulns: counts.vulns,
+        hosts:    counts.hosts,
+        vulns:    counts.vulns,
         exploits: counts.exploits,
+        flags:    counts.flags    || [],
+        findings: counts.findings || [],
+        objective_result: counts.objective_result || counts.objective || '',
     });
+    agOnDone(counts);
     appendConsoleLine('[SESSION] Agent finished — report available in the Report tab', 'text-primary');
 
     // Only overwrite sidebar stats if user is viewing this session
@@ -2876,6 +2914,7 @@ async function forkFromIteration(iteration) {
                         const mode = sessionInfo?.mode || 'full_auto';
                         renderMissionStart(target, mode);
                         eventsUpTo.forEach(ev => replaySessionEvent(ev.event_type, ev.data));
+                        setTimeout(_agRender, 150);
                     }
                 } catch (_) { /* replay best-effort */ }
 
@@ -2948,10 +2987,13 @@ function stopMissionUptime() {
 }
 
 function setUptimeFromDuration(seconds) {
-    const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-    const s = String(Math.floor(seconds % 60)).padStart(2, '0');
-    setStatValue('stat-uptime', `${h}:${m}:${s}`);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const hh = String(h).padStart(2, '0');
+    const mm = String(m).padStart(2, '0');
+    const ss = String(s).padStart(2, '0');
+    setStatValue('stat-uptime', `${hh}h ${mm}m ${ss}s`);
 }
 
 function startMissionUptime(startTimeMs) {
@@ -3020,7 +3062,8 @@ function resetMissionStats() {
     setStatValue('stat-vulns', '0');
     setStatValue('stat-hosts', '0');
     setStatValue('stat-ports', '0');
-    setStatValue('stat-uptime', '00:00:00');
+    setStatValue('stat-uptime', '00h 00m 00s');
+    setStatValue('stat-shells', '0');
 }
 
 // ─── Intel Panel: Analysis ─────────────────────────────────────────────────────
@@ -3442,6 +3485,36 @@ function _topoD3Render(svgId, tooltipId, allHosts, exploitResults, isFullscreen)
     const d3      = window.d3;
     const svgEl   = document.getElementById(svgId);
     if (!svgEl) return;
+
+    // Theme palette
+    const _tL = document.documentElement.classList.contains('light');
+    const _TC = {
+        svgBg:       _tL ? '#f4f4f0' : '#030303',
+        linkNorm:    _tL ? '#ccc'    : '#222',
+        linkExploit: '#FF3B3B',
+        nodeNorm:    _tL ? '#ebebea' : '#0f0f0f',
+        nodeStroke:  _tL ? '#bbb'    : '#333',
+        nodeMed:     _tL ? '#fff4ea' : '#1a0800',
+        nodeMedStr:  '#FF8C00',
+        nodeExpl:    _tL ? '#fff0f0' : '#1a0000',
+        nodeExplStr: '#FF3B3B',
+        ipNorm:      _tL ? '#333'    : '#aaa',
+        ipMed:       '#FF8C00',
+        ipExpl:      '#ff5555',
+        statusNorm:  _tL ? '#777'    : '#555',
+        statusMed:   '#FF8C00',
+        statusExpl:  '#FF3B3B',
+        osText:      _tL ? '#999'    : '#555',
+        outerNorm:   _tL ? '#ccc'    : '#2a2a2a',
+        emptyText1:  _tL ? '#ccc'    : '#1a1a1a',
+        emptyText2:  _tL ? '#aaa'    : '#2a2a2a',
+        emptyText3:  _tL ? '#bbb'    : '#1a1a1a',
+        tooltipBg:   _tL ? '#fff'    : '#0a0a0a',
+        tooltipBdr:  _tL ? '#ddd'    : '#222',
+        tooltipText: _tL ? '#111'    : '#ccc',
+        pdotFill:    _tL ? '#f0f0ee' : '#080808',
+    };
+    svgEl.style.background = _TC.svgBg;
     // Use real dimensions; fall back to safe defaults when element is hidden
     const realW = svgEl.clientWidth;
     const realH = svgEl.clientHeight;
@@ -3455,11 +3528,11 @@ function _topoD3Render(svgId, tooltipId, allHosts, exploitResults, isFullscreen)
         if (emptyG.empty()) {
             const eg = state.g.append('g').attr('class', 'topo-empty').attr('transform', `translate(${W/2},${H/2})`);
             eg.append('text').attr('text-anchor','middle').attr('y',-12)
-                .attr('fill','#1a1a1a').attr('font-family','monospace').attr('font-size', 13).attr('font-weight','bold').text('AEGIS');
+                .attr('fill',_TC.emptyText1).attr('font-family','monospace').attr('font-size', 13).attr('font-weight','bold').text('AEGIS');
             eg.append('text').attr('text-anchor','middle').attr('y',8)
-                .attr('fill','#2a2a2a').attr('font-family','monospace').attr('font-size', 10).text('Waiting for scan results…');
+                .attr('fill',_TC.emptyText2).attr('font-family','monospace').attr('font-size', 10).text('Waiting for scan results…');
             eg.append('text').attr('text-anchor','middle').attr('y',26)
-                .attr('fill','#1a1a1a').attr('font-family','monospace').attr('font-size', 9).text('Start a mission or load a session');
+                .attr('fill',_TC.emptyText3).attr('font-family','monospace').attr('font-size', 9).text('Start a mission or load a session');
         }
         return;
     }
@@ -3507,10 +3580,10 @@ function _topoD3Render(svgId, tooltipId, allHosts, exploitResults, isFullscreen)
         .merge(linkSel)
         .attr('x1', AEGIS_X).attr('y1', AEGIS_Y + 20)
         .attr('x2', d => hostPos[d.ip]?.x || 0).attr('y2', d => (hostPos[d.ip]?.y || 0) - nodeR)
-        .attr('stroke', d => xMap[d.ip] ? '#FF3B3B' : '#222')
+        .attr('stroke', d => xMap[d.ip] ? _TC.linkExploit : _TC.linkNorm)
         .attr('stroke-width', d => xMap[d.ip] ? 1.5 : 0.8)
         .attr('stroke-dasharray', d => xMap[d.ip] ? '6,3' : '3,4')
-        .attr('opacity', d => xMap[d.ip] ? 0.6 : 0.25)
+        .attr('opacity', d => xMap[d.ip] ? 0.6 : (_tL ? 0.5 : 0.25))
         .attr('marker-end', d => xMap[d.ip] ? 'url(#topo-arr-exploit)' : 'url(#topo-arr-scan)');
     linkSel.exit().remove();
 
@@ -3614,33 +3687,33 @@ function _topoD3Render(svgId, tooltipId, allHosts, exploitResults, isFullscreen)
     allNodeSel.select('.topo-outer')
         .attr('r', nodeR + 6)
         .attr('fill','none')
-        .attr('stroke', d => xMap[d.ip] ? '#FF3B3B' : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? '#FF8C00' : '#2a2a2a'))
+        .attr('stroke', d => xMap[d.ip] ? _TC.nodeExplStr : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? _TC.nodeMedStr : _TC.outerNorm))
         .attr('stroke-width', d => xMap[d.ip] ? 1.5 : 1)
         .attr('stroke-dasharray', d => xMap[d.ip] ? null : '3,3')
         .attr('opacity', 0.6);
 
     allNodeSel.select('.topo-circle')
         .attr('r', nodeR)
-        .attr('fill', d => xMap[d.ip] ? '#1a0000' : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? '#1a0800' : '#0f0f0f'))
-        .attr('stroke', d => xMap[d.ip] ? '#FF3B3B' : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? '#FF8C00' : '#333'))
+        .attr('fill', d => xMap[d.ip] ? _TC.nodeExpl : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? _TC.nodeMed : _TC.nodeNorm))
+        .attr('stroke', d => xMap[d.ip] ? _TC.nodeExplStr : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? _TC.nodeMedStr : _TC.nodeStroke))
         .attr('stroke-width', d => xMap[d.ip] ? 2.5 : 1.5);
 
     allNodeSel.select('.topo-ip')
         .attr('y', d => xMap[d.ip] ? -5 : -4)
         .attr('font-size', isFullscreen ? 13 : 11)
-        .attr('fill', d => xMap[d.ip] ? '#ff5555' : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? '#FF8C00' : '#aaa'))
+        .attr('fill', d => xMap[d.ip] ? _TC.ipExpl : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? _TC.ipMed : _TC.ipNorm))
         .text(d => `.${(d.ip || '').split('.').pop()}`);
 
     allNodeSel.select('.topo-status')
         .attr('y', d => xMap[d.ip] ? nodeR - 8 : nodeR - 8)
         .attr('font-size', isFullscreen ? 8 : 7)
-        .attr('fill', d => xMap[d.ip] ? '#FF3B3B' : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? '#FF8C00' : '#555'))
+        .attr('fill', d => xMap[d.ip] ? _TC.statusExpl : (d.ports.some(p => _MED_RISK_PORTS.has(p.number) || _HIGH_RISK_PORTS.has(p.number)) ? _TC.statusMed : _TC.statusNorm))
         .text(d => xMap[d.ip] ? 'PWNED' : (d.ports.filter(p => p.state === 'open').length + ' ports'));
 
     allNodeSel.select('.topo-os')
         .attr('y', d => xMap[d.ip] ? 7 : 6)
         .attr('font-size', isFullscreen ? 8 : 7)
-        .attr('fill', '#555')
+        .attr('fill', _TC.osText)
         .text(d => (d.os || '').split(' ').slice(0,2).join(' ').slice(0,12) || '');
 
     // Port dots around each host
@@ -3654,7 +3727,7 @@ function _topoD3Render(svgId, tooltipId, allHosts, exploitResults, isFullscreen)
             .attr('r', isFullscreen ? 5 : 4)
             .attr('cx', (p, pi) => { const n = openPorts.length; const a = -Math.PI/2 + (pi/(Math.max(n-1,1))) * Math.PI; return dotR * Math.cos(a); })
             .attr('cy', (p, pi) => { const n = openPorts.length; const a = -Math.PI/2 + (pi/(Math.max(n-1,1))) * Math.PI; return dotR * Math.sin(a); })
-            .attr('fill','#080808')
+            .attr('fill', _TC.pdotFill)
             .attr('stroke', p => _portRiskColor(p.number))
             .attr('stroke-width', p => xMap[d.ip]?.ports.has(p.number) ? 2.5 : 1.5);
         pdSel.exit().remove();
@@ -3708,6 +3781,17 @@ function _topoFitView(isFullscreen, svgId) {
 function _topoShowTooltip(ev, host, xMap, exploitResults, tooltipId) {
     const tip = document.getElementById(tooltipId || 'topo-tooltip');
     if (!tip) return;
+    const _tL = document.documentElement.classList.contains('light');
+    const tipBg   = _tL ? '#fff'  : '#0a0a0a';
+    const tipBdr  = _tL ? '#ddd'  : '#222';
+    const tipText = _tL ? '#333'  : '#ccc';
+    const subText = _tL ? '#888'  : '#555';
+    const muted   = _tL ? '#bbb'  : '#444';
+    const divBdr  = _tL ? '#eee'  : '#1a1a1a';
+    tip.style.background = tipBg;
+    tip.style.border = `1px solid ${tipBdr}`;
+    tip.style.color = tipText;
+
     const ex       = xMap[host.ip];
     const openPorts = host.ports.filter(p => p.state === 'open');
     const isEx     = !!ex;
@@ -3720,8 +3804,8 @@ function _topoShowTooltip(ev, host, xMap, exploitResults, tooltipId) {
         return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
             <span style="width:6px;height:6px;border-radius:50%;background:${c};flex-shrink:0"></span>
             <span style="color:${isExp ? '#FF3B3B' : c};font-weight:${isExp ? 'bold' : 'normal'}">${p.number}</span>
-            <span style="color:#555">/${p.protocol || 'tcp'}</span>
-            <span style="color:#888">${_esc(p.service || '')}</span>
+            <span style="color:${subText}">/${p.protocol || 'tcp'}</span>
+            <span style="color:${subText}">${_esc(p.service || '')}</span>
             ${isExp ? '<span style="color:#FF3B3B;margin-left:auto">⚡</span>' : ''}
         </div>`;
     }).join('');
@@ -3731,16 +3815,16 @@ function _topoShowTooltip(ev, host, xMap, exploitResults, tooltipId) {
     const lateralTgt = (exploitResults || []).filter(e => e.source_ip === host.ip).map(e => e.host_ip);
 
     tip.innerHTML = `
-        <div style="color:${statusColor};font-weight:bold;font-size:11px;margin-bottom:6px;border-bottom:1px solid #1a1a1a;padding-bottom:5px;">
-            ${_esc(host.ip)} ${host.hostname ? `<span style="color:#555;font-weight:normal">(${_esc(host.hostname)})</span>` : ''}
+        <div style="color:${statusColor};font-weight:bold;font-size:11px;margin-bottom:6px;border-bottom:1px solid ${divBdr};padding-bottom:5px;">
+            ${_esc(host.ip)} ${host.hostname ? `<span style="color:${subText};font-weight:normal">(${_esc(host.hostname)})</span>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
             <span style="width:6px;height:6px;border-radius:50%;background:${statusColor}"></span>
             <span style="color:${statusColor}">${statusText}</span>
-            ${host.os ? `<span style="color:#555;margin-left:auto">${_esc(host.os.slice(0,24))}</span>` : ''}
+            ${host.os ? `<span style="color:${subText};margin-left:auto">${_esc(host.os.slice(0,24))}</span>` : ''}
         </div>
-        ${openPorts.length > 0 ? `<div style="color:#444;margin-bottom:3px;font-size:9px;text-transform:uppercase;letter-spacing:1px">Open Ports (${openPorts.length})</div>${portRows}` : ''}
-        ${ex ? `<div style="color:#444;margin-top:6px;margin-bottom:3px;font-size:9px;text-transform:uppercase;letter-spacing:1px">Modules</div>${moduleList}` : ''}
+        ${openPorts.length > 0 ? `<div style="color:${muted};margin-bottom:3px;font-size:9px;text-transform:uppercase;letter-spacing:1px">Open Ports (${openPorts.length})</div>${portRows}` : ''}
+        ${ex ? `<div style="color:${muted};margin-top:6px;margin-bottom:3px;font-size:9px;text-transform:uppercase;letter-spacing:1px">Modules</div>${moduleList}` : ''}
         ${lateralSrc.length ? `<div style="color:#fb923c;margin-top:5px;font-size:9px">← Pivot from: ${lateralSrc.join(', ')}</div>` : ''}
         ${lateralTgt.length ? `<div style="color:#fb923c;font-size:9px">→ Moved to: ${lateralTgt.join(', ')}</div>` : ''}
     `;
@@ -4297,15 +4381,18 @@ function toggleThinkExpand(btn) {
     const card   = btn.closest('.think-card');
     const expand = card ? card.querySelector('.think-expand') : null;
     if (!expand) return;
-    const isOpen = expand.style.maxHeight && expand.style.maxHeight !== '0px' && expand.style.maxHeight !== '0';
-    if (isOpen) {
-        expand.style.maxHeight = '0';
-        const ic = btn.querySelector('.material-symbols-outlined');
+    const ic = btn.querySelector('.material-symbols-outlined');
+    const isOpen = expand.style.maxHeight !== '0px' && expand.style.maxHeight !== '' && expand.style.maxHeight !== null;
+    if (isOpen && expand.style.maxHeight !== 'none') {
+        _collapseEl(expand);
         if (ic) ic.textContent = 'expand_more';
-    } else {
-        expand.style.maxHeight = Math.max(expand.scrollHeight, 60) + 'px';
-        const ic = btn.querySelector('.material-symbols-outlined');
+    } else if (expand.style.maxHeight === '0px' || expand.style.maxHeight === '') {
+        _expandEl(expand);
         if (ic) ic.textContent = 'expand_less';
+    } else {
+        // 'none' → collapse
+        _collapseEl(expand);
+        if (ic) ic.textContent = 'expand_more';
     }
 }
 
@@ -4332,16 +4419,154 @@ function _renderToolParams(params) {
 
 function _getToolStyle(toolName) {
     const n = (toolName || '').toLowerCase();
-    if (n.includes('nmap'))                          return { icon:'wifi_find',     label:'NMAP',        border:'border-blue-500/50',   header:'text-blue-400/80',   spin:'border-blue-400/50'   };
-    if (n.includes('bash')||n==='exec'||n==='run_command'||n==='shell') return { icon:'terminal',      label:'BASH',        border:'border-green-500/50',  header:'text-green-400/80',  spin:'border-green-400/50'  };
-    if (n.includes('python'))                        return { icon:'code',          label:'PYTHON',      border:'border-yellow-500/50', header:'text-yellow-400/80', spin:'border-yellow-400/50' };
-    if (n.includes('msf')||n.includes('metasploit')) return { icon:'rocket_launch', label:'METASPLOIT',  border:'border-red-500/50',    header:'text-red-400/80',    spin:'border-red-400/50'    };
-    if (n.includes('searchsploit'))                  return { icon:'manage_search', label:'SEARCHSPLOIT',border:'border-orange-500/50', header:'text-orange-400/80', spin:'border-orange-400/50' };
-    if (n.includes('hydra')||n.includes('brute'))    return { icon:'key',           label:'HYDRA',       border:'border-purple-500/50', header:'text-purple-400/80', spin:'border-purple-400/50' };
-    if (n.includes('sqlmap')||n.includes('sql'))     return { icon:'storage',       label:'SQLMAP',      border:'border-orange-500/50', header:'text-orange-400/80', spin:'border-orange-400/50' };
-    if (n.includes('curl')||n.includes('http')||n.includes('web')) return { icon:'http', label:'HTTP',   border:'border-cyan-500/50',   header:'text-cyan-400/80',   spin:'border-cyan-400/50'   };
-    if (n.includes('nikto')||n.includes('dirb')||n.includes('gobuster')) return { icon:'travel_explore', label:toolName.toUpperCase().slice(0,12), border:'border-teal-500/50', header:'text-teal-400/80', spin:'border-teal-400/50' };
-    return { icon:'terminal', label:toolName.toUpperCase().slice(0,12)||'TOOL', border:'border-blue-500/50', header:'text-blue-400/80', spin:'border-blue-400/50' };
+    if (n.includes('nmap'))                          return { icon:'wifi_find',     label:'NMAP',        border:'border-blue-500/50',   header:'text-blue-400',   spin:'border-blue-400/50',   hex:'#3b82f6', rgba:'rgba(59,130,246,0.35)'   };
+    if (n.includes('bash')||n==='exec'||n==='run_command'||n==='shell') return { icon:'terminal',      label:'BASH',        border:'border-green-500/50',  header:'text-green-400',  spin:'border-green-400/50',  hex:'#22c55e', rgba:'rgba(34,197,94,0.35)'   };
+    if (n.includes('ssh'))                                               return { icon:'key',           label:'SSH',         border:'border-cyan-500/50',   header:'text-cyan-400',   spin:'border-cyan-400/50',   hex:'#06b6d4', rgba:'rgba(6,182,212,0.35)'    };
+    if (n.includes('python'))                        return { icon:'code',          label:'PYTHON',      border:'border-yellow-500/50', header:'text-yellow-400', spin:'border-yellow-400/50', hex:'#eab308', rgba:'rgba(234,179,8,0.35)'   };
+    if (n.includes('msf')||n.includes('metasploit')) return { icon:'rocket_launch', label:'METASPLOIT',  border:'border-red-500/50',    header:'text-red-400',    spin:'border-red-400/50',    hex:'#ef4444', rgba:'rgba(239,68,68,0.35)'    };
+    if (n.includes('searchsploit'))                  return { icon:'manage_search', label:'SEARCHSPLOIT',border:'border-orange-500/50', header:'text-orange-400', spin:'border-orange-400/50', hex:'#f97316', rgba:'rgba(249,115,22,0.35)'  };
+    if (n.includes('hydra')||n.includes('brute'))    return { icon:'key',           label:'HYDRA',       border:'border-purple-500/50', header:'text-purple-400', spin:'border-purple-400/50', hex:'#a855f7', rgba:'rgba(168,85,247,0.35)'  };
+    if (n.includes('sqlmap')||n.includes('sql'))     return { icon:'storage',       label:'SQLMAP',      border:'border-orange-500/50', header:'text-orange-400', spin:'border-orange-400/50', hex:'#f97316', rgba:'rgba(249,115,22,0.35)'  };
+    if (n.includes('curl')||n.includes('http')||n.includes('web')) return { icon:'http', label:'HTTP',   border:'border-cyan-500/50',   header:'text-cyan-400',   spin:'border-cyan-400/50',   hex:'#06b6d4', rgba:'rgba(6,182,212,0.35)'   };
+    if (n.includes('nikto')||n.includes('dirb')||n.includes('gobuster')) return { icon:'travel_explore', label:toolName.toUpperCase().slice(0,12), border:'border-teal-500/50', header:'text-teal-400', spin:'border-teal-400/50', hex:'#14b8a6', rgba:'rgba(20,184,166,0.35)' };
+    return { icon:'terminal', label:toolName.toUpperCase().slice(0,12)||'TOOL', border:'border-blue-500/50', header:'text-blue-400', spin:'border-blue-400/50', hex:'#3b82f6', rgba:'rgba(59,130,246,0.35)' };
+}
+
+// Returns a short, human-readable summary line for the collapsed batch item header
+function _getToolSpecialSummary(tool, params) {
+    const n = (tool || '').toLowerCase();
+    if (!params || typeof params !== 'object') return tool;
+
+    if (n.includes('nmap')) {
+        const cmd = params.command || params.cmd || params.command_line || '';
+        let ip = params.target || params.host || params.ip || '';
+        let ports = params.ports || params.port_range || '';
+        let scanType = '';
+        if (cmd) {
+            const ipMatch = cmd.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:\/\d+)?)\b/);
+            if (ipMatch) ip = ipMatch[1];
+            const portMatch = cmd.match(/-p[\s]*([\S]+)/);
+            if (portMatch) ports = portMatch[1];
+            if (cmd.includes('-sV') || cmd.includes('--version')) scanType = 'service scan';
+            else if (cmd.includes('-sS') || cmd.includes('-sT')) scanType = 'port scan';
+            else if (cmd.includes('-sU')) scanType = 'UDP scan';
+            else if (cmd.includes('-sC') || cmd.includes('--script')) scanType = 'script scan';
+            else if (cmd.includes('-A')) scanType = 'aggressive scan';
+            else scanType = 'scan';
+        }
+        const parts = [];
+        if (ip) parts.push(ip);
+        if (scanType) parts.push(scanType);
+        if (ports) parts.push('ports:' + ports);
+        return parts.join(' · ') || tool;
+    }
+
+    if (n.includes('searchsploit')) {
+        const query = params.query || params.search || params.service || params.term || params.keyword || '';
+        const version = params.version || '';
+        return query ? (version ? `${query} ${version}` : query) : tool;
+    }
+
+    if (n.includes('msf') || n.includes('metasploit')) {
+        const module = params.module || params.exploit || '';
+        const target = params.target || params.rhost || params.host || params.ip || '';
+        if (module && target) return `${module} → ${target}`;
+        if (module) return module;
+        const cmd = params.command || params.cmd || '';
+        return cmd ? cmd.slice(0, 80) : tool;
+    }
+
+    if (n.includes('ssh')) {
+        const host = params.host || params.target || params.ip || '';
+        const cmd  = params.command || params.cmd || '';
+        if (host && cmd) return `${host}: ${cmd.slice(0, 60)}`;
+        if (cmd) return cmd.slice(0, 80);
+        if (host) return `connect → ${host}`;
+        return tool;
+    }
+
+    // Generic fallback
+    const cmd = params.command || params.cmd || params.command_line || '';
+    if (cmd) return String(cmd).slice(0, 100);
+    const target = params.target || params.host || params.ip || params.url || '';
+    const mod = params.module || params.exploit || '';
+    if (mod) return mod.slice(0, 80);
+    if (target) return String(target).slice(0, 80);
+    const first = Object.values(params).find(v => typeof v === 'string');
+    return first ? first.slice(0, 80) : tool;
+}
+
+// ── Expand/collapse animation helpers ────────────────────────────────────────
+// Animate an element open: measure real height → animate → then release to auto
+function _expandEl(el, durationMs = 220) {
+    // Measure actual content height while hidden
+    el.style.transition = 'none';
+    el.style.maxHeight  = 'none';
+    const h = el.scrollHeight;
+    el.style.maxHeight  = '0px';
+    el.offsetHeight;                                     // force reflow
+    el.style.transition = `max-height ${durationMs}ms cubic-bezier(0.4,0,0.2,1)`;
+    el.style.maxHeight  = h + 'px';
+    // After animation, release max-height so inner expansions aren't clipped
+    clearTimeout(el._expandTimer);
+    el._expandTimer = setTimeout(() => { el.style.maxHeight = 'none'; }, durationMs + 20);
+}
+
+// Animate an element closed: pin current height → animate to 0
+function _collapseEl(el, durationMs = 200) {
+    clearTimeout(el._expandTimer);
+    el.style.transition = 'none';
+    el.style.maxHeight  = el.scrollHeight + 'px';
+    el.offsetHeight;
+    el.style.transition = `max-height ${durationMs}ms cubic-bezier(0.4,0,0.2,1)`;
+    el.style.maxHeight  = '0px';
+}
+
+function toggleToolBatch(headerEl) {
+    const card   = headerEl.closest('.tool-batch-card');
+    const list   = card ? card.querySelector('.tb-list') : null;
+    const icon   = headerEl.querySelector('.tb-expand-icon');
+    if (!list) return;
+    const isOpen = list.style.maxHeight !== '0px' && list.style.maxHeight !== '' && list.style.maxHeight !== null;
+    if (isOpen && list.style.maxHeight !== 'none') {
+        _collapseEl(list);
+        if (icon) icon.textContent = 'expand_more';
+    } else if (list.style.maxHeight === '0px' || list.style.maxHeight === '') {
+        _expandEl(list);
+        if (icon) icon.textContent = 'expand_less';
+    } else {
+        // already 'none' (open) → collapse
+        _collapseEl(list);
+        if (icon) icon.textContent = 'expand_more';
+    }
+}
+
+function _tbListRefreshHeight(el) {
+    // If the parent list is pinned to a specific px, release it so it doesn't clip
+    const list = el ? el.closest('.tb-list') : null;
+    if (list && list.style.maxHeight && list.style.maxHeight !== '0px') {
+        list.style.maxHeight = 'none';
+    }
+}
+
+function toggleToolItemExpand(headerEl) {
+    const item   = headerEl.closest('.tool-batch-item');
+    const expand = item ? item.querySelector('.tool-item-expand') : null;
+    const icon   = headerEl.querySelector('.tbi-expand-icon');
+    if (!expand) return;
+    const isOpen = expand.style.maxHeight !== '0px' && expand.style.maxHeight !== '' && expand.style.maxHeight !== null;
+    if (isOpen && expand.style.maxHeight !== 'none') {
+        _collapseEl(expand);
+        if (icon) icon.textContent = 'expand_more';
+    } else if (expand.style.maxHeight === '0px' || expand.style.maxHeight === '') {
+        _expandEl(expand);
+        if (icon) icon.textContent = 'expand_less';
+        _tbListRefreshHeight(item);
+    } else {
+        // 'none' → collapse
+        _collapseEl(expand);
+        if (icon) icon.textContent = 'expand_more';
+    }
 }
 
 function _toolCallSummary(tool, params) {
@@ -4364,6 +4589,105 @@ function _resultSummary(output) {
 
 function _closeToolBatch() { _toolBatch = null; }
 
+// ─── Feed Filter (auto-expand preferences) ────────────────────────────────────
+
+const _FEED_FILTER_TOOLS = [
+    { key: 'nmap',        label: 'NMAP',         icon: 'wifi_find'     },
+    { key: 'metasploit',  label: 'METASPLOIT',   icon: 'rocket_launch' },
+    { key: 'searchsploit',label: 'SEARCHSPLOIT', icon: 'manage_search' },
+    { key: 'bash',        label: 'BASH / SHELL',  icon: 'terminal'      },
+    { key: 'ssh',         label: 'SSH',           icon: 'key'           },
+    { key: 'hydra',       label: 'HYDRA',         icon: 'key'           },
+    { key: 'thinking',    label: 'THINKING',      icon: 'psychology'    },
+    { key: 'reflecting',  label: 'REFLECTION',    icon: 'lightbulb'     },
+];
+
+let _feedFilter = null;   // lazily loaded from localStorage
+
+function _getFeedFilter() {
+    if (_feedFilter) return _feedFilter;
+    try {
+        const saved = localStorage.getItem('aegis_feed_filter');
+        _feedFilter = saved ? JSON.parse(saved) : {};
+    } catch { _feedFilter = {}; }
+    // Default: everything expanded
+    _FEED_FILTER_TOOLS.forEach(t => {
+        if (_feedFilter[t.key] === undefined) _feedFilter[t.key] = true;
+    });
+    return _feedFilter;
+}
+
+function _saveFeedFilter() {
+    try { localStorage.setItem('aegis_feed_filter', JSON.stringify(_feedFilter)); } catch {}
+}
+
+function _feedFilterAutoExpand(toolKey) {
+    const f = _getFeedFilter();
+    return f[toolKey] !== false;
+}
+
+function _toolKeyFromName(toolName) {
+    const n = (toolName || '').toLowerCase();
+    if (n.includes('nmap'))                            return 'nmap';
+    if (n.includes('msf') || n.includes('metasploit')) return 'metasploit';
+    if (n.includes('searchsploit'))                    return 'searchsploit';
+    if (n.includes('ssh'))                             return 'ssh';
+    if (n.includes('hydra') || n.includes('brute'))   return 'hydra';
+    return 'bash';
+}
+
+function toggleFeedFilter() {
+    const panel = document.getElementById('feed-filter-panel');
+    if (!panel) return;
+    const isHidden = panel.classList.contains('hidden');
+    if (isHidden) {
+        _renderFeedFilterPanel();
+        panel.classList.remove('hidden');
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', _closeFeedFilterOutside, { once: true });
+        }, 0);
+    } else {
+        panel.classList.add('hidden');
+    }
+}
+
+function _closeFeedFilterOutside(e) {
+    const panel = document.getElementById('feed-filter-panel');
+    if (panel && !panel.contains(e.target)) panel.classList.add('hidden');
+}
+
+function _renderFeedFilterPanel() {
+    const list = document.getElementById('feed-filter-list');
+    if (!list) return;
+    const f = _getFeedFilter();
+    list.innerHTML = _FEED_FILTER_TOOLS.map(t => `
+        <label class="flex items-center gap-2 cursor-pointer group">
+            <div class="relative w-7 h-4 shrink-0">
+                <input type="checkbox" class="sr-only peer" ${f[t.key] !== false ? 'checked' : ''}
+                    onchange="feedFilterToggle('${t.key}', this.checked)">
+                <div class="w-7 h-4 rounded-full bg-border-color peer-checked:bg-primary/60 transition-colors"></div>
+                <div class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white/60 peer-checked:translate-x-3 transition-transform"></div>
+            </div>
+            <span class="material-symbols-outlined text-[12px] text-secondary-text/50">${t.icon}</span>
+            <span class="text-[10px] mono-text text-secondary-text/70 uppercase tracking-wide">${t.label}</span>
+        </label>
+    `).join('');
+}
+
+function feedFilterToggle(key, val) {
+    const f = _getFeedFilter();
+    f[key] = val;
+    _saveFeedFilter();
+}
+
+function feedFilterSetAll(val) {
+    const f = _getFeedFilter();
+    _FEED_FILTER_TOOLS.forEach(t => { f[t.key] = val; });
+    _saveFeedFilter();
+    _renderFeedFilterPanel();
+}
+
 function _openOrAddToToolBatch(data) {
     const tool  = data.tool || '';
     const style = _getToolStyle(tool);
@@ -4376,18 +4700,22 @@ function _openOrAddToToolBatch(data) {
         const wrapperEl = document.createElement('div');
         wrapperEl.className = 'tool-batch-card';
         wrapperEl.innerHTML = `
-            <div class="border-l-2 ${style.border} bg-surface font-mono text-xs overflow-hidden">
-                <div class="flex items-center gap-2 px-4 py-2 border-b border-border-color/30">
+            <div class="border-l-2 ${style.border} bg-surface font-mono text-xs" style="border:1px solid ${style.rgba};border-left:4px solid ${style.hex};">
+                <div class="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-white/[0.03] transition-colors select-none"
+                     onclick="toggleToolBatch(this)">
                     <span class="material-symbols-outlined text-[14px] ${style.header}">${style.icon}</span>
                     <span class="${style.header} font-bold text-[11px] uppercase tracking-widest" id="${bId}-label">${style.label}</span>
-                    <span class="ml-auto text-secondary-text/40 text-[10px]" id="${bId}-count">1 run</span>
+                    <span class="text-secondary-text/40 text-[10px] ml-1" id="${bId}-count">1</span>
+                    <span class="material-symbols-outlined text-[13px] text-secondary-text/30 ml-auto tb-expand-icon">expand_more</span>
                 </div>
-                <div id="${bId}-list" class="divide-y divide-border-color/20"></div>
+                <div id="${bId}-list" class="tb-list divide-y divide-border-color/20 overflow-hidden" style="max-height:0;transition:max-height 0.35s ease-out;"></div>
             </div>`;
         feed.appendChild(wrapperEl);
+        const listEl  = wrapperEl.querySelector(`#${bId}-list`);
+        const iconEl  = wrapperEl.querySelector('.tb-expand-icon');
         _toolBatch = {
             wrapperEl,
-            listEl:   wrapperEl.querySelector(`#${bId}-list`),
+            listEl,
             countEl:  wrapperEl.querySelector(`#${bId}-count`),
             labelEl:  wrapperEl.querySelector(`#${bId}-label`),
             borderEl: wrapperEl.querySelector('.border-l-2'),
@@ -4395,40 +4723,55 @@ function _openOrAddToToolBatch(data) {
             toolSet: new Set([tool]),
             style
         };
+        // Auto-expand based on filter preference
+        const toolKey = _toolKeyFromName(tool);
+        if (_feedFilterAutoExpand(toolKey)) {
+            requestAnimationFrame(() => {
+                listEl.style.maxHeight = 'none';
+                if (iconEl) iconEl.textContent = 'expand_less';
+            });
+        }
         if (agentAutoScroll) { const s = document.getElementById('agent-scroll-area'); if(s) s.scrollTop = s.scrollHeight; }
     } else {
         _toolBatch.toolSet.add(tool);
         if (_toolBatch.toolSet.size > 1 && _toolBatch.labelEl) _toolBatch.labelEl.textContent = 'TOOLS';
     }
 
-    const summary = _esc(_toolCallSummary(tool, data.params || {}));
+    const specialSummary = _esc(_getToolSpecialSummary(tool, data.params || {}));
+    const paramsHtml     = _renderToolParams(data.params || {});
     const sid     = _toolDetailStoreId++;
     _toolDetailStore.set(sid, data);
     const itemEl  = document.createElement('div');
     itemEl.id = `tbitem-${uid}`;
-    itemEl.className = 'group/item flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.03] transition-colors';
+    itemEl.className = 'tool-batch-item';
     itemEl.setAttribute('data-tool-id', sid);
     itemEl.setAttribute('data-tool-title', `${_esc(tool)} · details`);
     itemEl.innerHTML = `
-        <div class="shrink-0 mt-0.5 w-4 h-4 flex items-center justify-center" id="tbstatus-${uid}">
-            <div class="w-3 h-3 border ${_toolBatch.style.spin} border-t-transparent rounded-full animate-spin"></div>
-        </div>
-        <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-1.5 mb-0.5">
-                <span class="text-[10px] ${_toolBatch.style.header} font-bold uppercase tracking-wide">${_esc(tool)}</span>
+        <div class="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-white/[0.03] transition-colors select-none"
+             onclick="toggleToolItemExpand(this)">
+            <div class="shrink-0 w-4 h-4 flex items-center justify-center" id="tbstatus-${uid}">
+                <div class="w-3 h-3 border ${_toolBatch.style.spin} border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <div class="text-secondary-text/70 text-[11px] break-all line-clamp-1">${summary}</div>
-            <div class="text-secondary-text/40 text-[10px] mt-0.5 break-all line-clamp-2 hidden" id="tbresult-${uid}"></div>
+            <div class="flex-1 min-w-0">
+                <div class="text-secondary-text/80 text-[11px] truncate">${specialSummary}</div>
+            </div>
+            <span class="material-symbols-outlined text-[13px] text-secondary-text/30 shrink-0 tbi-expand-icon">expand_more</span>
         </div>
-        <button onclick="showToolDetail(this)"
-            class="shrink-0 mt-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity text-secondary-text/50 hover:text-primary">
-            <span class="material-symbols-outlined text-[13px]">info</span>
-        </button>`;
+        <div class="tool-item-expand overflow-hidden" style="max-height:0;transition:max-height 0.3s ease-out;">
+            <div class="px-4 pb-3 pt-2 border-t border-border-color/20">
+                <div class="space-y-0.5" id="tbdetail-${uid}">${paramsHtml}</div>
+                <div class="mt-1.5 hidden" id="tbresult-detail-${uid}"></div>
+            </div>
+        </div>`;
     _toolBatch.listEl.appendChild(itemEl);
 
     const n = _toolBatch.listEl.children.length;
-    if (_toolBatch.countEl) _toolBatch.countEl.textContent = `${n} run${n!==1?'s':''}`;
+    if (_toolBatch.countEl) _toolBatch.countEl.textContent = `${n}`;
     _toolBatch.pendingQueue.push({ uid, tool, callData: data });
+    // If list is already open, stretch its max-height to fit the new item
+    if (_toolBatch.listEl.style.maxHeight && _toolBatch.listEl.style.maxHeight !== '0px') {
+        _toolBatch.listEl.style.maxHeight = _toolBatch.listEl.scrollHeight + 'px';
+    }
 
     if (agentAutoScroll) { const s = document.getElementById('agent-scroll-area'); if(s) s.scrollTop = s.scrollHeight; }
     scheduleMinimapUpdate();
@@ -4449,8 +4792,21 @@ function _resolveToolBatchItem(data) {
         const cl = success ? 'text-primary'  : 'text-danger';
         statusEl.innerHTML = `<span class="material-symbols-outlined text-[15px] ${cl}" style="font-variation-settings:'FILL' 1;">${ic}</span>`;
     }
-    const resultEl = document.getElementById(`tbresult-${uid}`);
-    if (resultEl && summary) { resultEl.textContent = summary; resultEl.classList.remove('hidden'); }
+    // Result summary removed from header — visible in expanded detail only
+    // Also write full output into the expandable detail section
+    const resultDetailEl = document.getElementById(`tbresult-detail-${uid}`);
+    if (resultDetailEl && output) {
+        const cl = success ? 'text-primary/70' : 'text-danger/70';
+        resultDetailEl.innerHTML = `<pre class="${cl} text-[10px] whitespace-pre-wrap break-all leading-relaxed max-h-40 overflow-y-auto border-t border-border-color/20 pt-1.5">${_esc(output.trim().slice(0, 800))}</pre>`;
+        resultDetailEl.classList.remove('hidden');
+        // Recalculate heights if sections are open
+        const item = resultDetailEl.closest('.tool-batch-item');
+        const expand = item ? item.querySelector('.tool-item-expand') : null;
+        if (expand && expand.style.maxHeight && expand.style.maxHeight !== '0px') {
+            expand.style.maxHeight = expand.scrollHeight + 'px';
+        }
+        _tbListRefreshHeight(resultDetailEl);
+    }
 
     const itemEl = document.getElementById(`tbitem-${uid}`);
     if (itemEl) {
@@ -4473,7 +4829,7 @@ function getMissionFeed() {
         if (emptyState) emptyState.style.display = 'none';
         feed = document.createElement('div');
         feed.id = 'mission-feed';
-        feed.className = 'flex flex-col gap-2 w-full';
+        feed.className = 'flex flex-col gap-4 w-full';
         stream.appendChild(feed);
     }
     return feed;
@@ -4481,16 +4837,18 @@ function getMissionFeed() {
 
 function appendMissionCard(html) {
     const feed = getMissionFeed();
-    if (!feed) return;
+    if (!feed) return null;
     const wrapper = document.createElement('div');
     wrapper.innerHTML = html.trim();
-    if (wrapper.firstChild) feed.appendChild(wrapper.firstChild);
+    const el = wrapper.firstChild;
+    if (el) feed.appendChild(el);
     // Only auto-scroll if the user hasn't manually scrolled up
     if (agentAutoScroll) {
         const scrollEl = document.getElementById('agent-scroll-area');
         if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
     }
     scheduleMinimapUpdate();
+    return el || null;
 }
 
 function clearMissionFeed() {
@@ -4568,7 +4926,7 @@ function markObjectiveComplete(objectiveText) {
 function renderMissionStart(target, mode) {
     const ts = new Date().toLocaleTimeString();
     appendMissionCard(`
-        <div class="border border-primary/30 bg-primary/5 px-4 py-3 font-mono text-xs">
+        <div class="bg-primary/5 px-4 py-3 font-mono text-xs" style="border:1px solid rgba(204,255,0,0.35);border-left:4px solid #ccff00;">
             <div class="flex items-center gap-2 text-primary font-bold mb-1">
                 <span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1;">rocket_launch</span>
                 MISSION STARTED &nbsp;·&nbsp; ${ts}
@@ -4588,8 +4946,9 @@ function startAgentStreamCard(mode) {
     finalizeAgentStreamCard();
     _agentStreamMode  = mode;
     const isReflect   = mode === 'reflecting';
-    const borderColor = isReflect ? 'border-purple-500/40' : 'border-yellow-500/30';
-    const labelColor  = isReflect ? 'text-purple-400/70'   : 'text-yellow-400/70';
+    const borderHex   = isReflect ? '#a855f7' : '#eab308';
+    const borderRgba  = isReflect ? 'rgba(168,85,247,0.35)' : 'rgba(234,179,8,0.35)';
+    const labelColor  = isReflect ? 'text-purple-400'   : 'text-yellow-400';
     const icon        = isReflect ? 'lightbulb'             : 'psychology';
     const label       = isReflect ? 'REFLECTING'            : 'THINKING';
 
@@ -4603,26 +4962,29 @@ function startAgentStreamCard(mode) {
     wrapper.className = 'mission-card-wrapper';
 
     if (isReflect) {
-        // Reflecting: keep card visible after finalization — button to expand
+        const autoOpen  = _feedFilterAutoExpand('reflecting');
+        const mhStyle   = autoOpen ? 'max-height:none;' : 'max-height:0;';
+        const expandIco = autoOpen ? 'expand_less' : 'expand_more';
+        // Reflecting: keep card visible after finalization
         wrapper.innerHTML = `
-            <div class="think-card border-l-2 ${borderColor} bg-surface font-mono text-xs">
+            <div class="think-card bg-surface font-mono text-xs" style="border:1px solid ${borderRgba};border-left:4px solid ${borderHex};">
                 <div class="flex items-center gap-2 ${labelColor} font-bold text-[11px] uppercase tracking-widest pl-4 pr-4 py-2.5">
                     <span class="material-symbols-outlined text-[14px] animate-pulse">${icon}</span>
                     ${label}
                     ${dots}
                     <button onclick="toggleThinkExpand(this)" title="Toggle detail"
                         class="ml-auto flex items-center gap-1 ${labelColor} opacity-60 hover:opacity-100 transition-opacity px-1 py-0.5">
-                        <span class="material-symbols-outlined text-[15px]">expand_more</span>
+                        <span class="material-symbols-outlined text-[15px]">${expandIco}</span>
                     </button>
                 </div>
-                <div class="think-expand overflow-hidden pl-4 pr-4" style="max-height:0;transition:max-height 0.3s ease-out;">
+                <div class="think-expand overflow-hidden pl-4 pr-4" style="${mhStyle}transition:max-height 0.25s ease-out;">
                     <pre id="agent-stream-body" class="text-secondary-text/70 text-[11px] italic leading-relaxed whitespace-pre-wrap break-all pb-3 max-h-72 overflow-y-auto"></pre>
                 </div>
             </div>`;
     } else {
         // Thinking: card will be removed on finalization; just show animated header
         wrapper.innerHTML = `
-            <div class="border-l-2 ${borderColor} bg-surface pl-4 pr-4 py-2.5 font-mono text-xs">
+            <div class="bg-surface pl-4 pr-4 py-2.5 font-mono text-xs" style="border:1px solid ${borderRgba};border-left:4px solid ${borderHex};">
                 <div class="flex items-center gap-2 ${labelColor} font-bold text-[11px] uppercase tracking-widest">
                     <span class="material-symbols-outlined text-[14px] animate-pulse">${icon}</span>
                     ${label}
@@ -4662,14 +5024,21 @@ function finalizeAgentStreamCard() {
         // Remove the temp streaming card — renderMissionReasoning will show clean parsed card
         _agentStreamEl.remove();
     } else {
-        // Reflecting: keep the card, just remove the animated dots cursor
+        // Reflecting: keep the card, remove dots, apply markdown bold
         const cursor = _agentStreamEl.querySelector('#agent-stream-cursor');
         if (cursor) cursor.remove();
-        // Fix expand height now that content is final
-        const expand = _agentStreamEl.querySelector('.think-expand');
-        if (expand && expand.style.maxHeight !== '0px' && expand.style.maxHeight !== '0') {
-            expand.style.maxHeight = expand.scrollHeight + 'px';
+        // Convert plain-text pre → formatted div with markdown bold
+        const body = _agentStreamEl.querySelector('#agent-stream-body');
+        if (body) {
+            const raw = body.textContent || '';
+            const div = document.createElement('div');
+            div.className = body.className.replace('whitespace-pre-wrap', 'whitespace-pre-wrap');
+            div.innerHTML = _parseMd(_esc(raw));
+            body.replaceWith(div);
         }
+        // Release max-height now that content is final
+        const expand = _agentStreamEl.querySelector('.think-expand');
+        if (expand) { expand.style.maxHeight = 'none'; }
     }
     _agentStreamEl   = null;
     _agentStreamBody = null;
@@ -4691,12 +5060,14 @@ function renderMissionReasoning(data) {
         action    ? `<p class="text-primary text-[11px] font-bold mt-1 not-italic">→ &nbsp;${action}</p>` : '',
     ].filter(Boolean).join('');
 
+    const thinkOpen = _feedFilterAutoExpand('thinking');
+    const thinkMH   = thinkOpen ? 'none' : '0px';
+    const thinkIco  = thinkOpen ? 'expand_less' : 'expand_more';
     appendMissionCard(`
-        <div class="think-card border-l-2 border-yellow-500/40 bg-surface font-mono text-xs" data-iteration="${iter}">
-            <div class="flex items-center gap-2 pl-4 pr-4 py-2.5 text-yellow-400/70 font-bold text-[11px] uppercase tracking-widest">
+        <div class="think-card bg-surface font-mono text-xs" data-iteration="${iter}" style="border:1px solid rgba(234,179,8,0.35);border-left:4px solid #eab308;">
+            <div class="flex items-center gap-2 pl-4 pr-4 py-2.5 text-yellow-400 font-bold text-[11px] uppercase tracking-widest">
                 <span class="material-symbols-outlined text-[14px]">psychology</span>
                 THINKING
-                <span class="text-yellow-400/30 font-normal text-[10px] normal-case tracking-normal truncate max-w-[220px]">${preview}</span>
                 <div class="ml-auto flex items-center gap-2 shrink-0">
                     <button onclick="forkFromIteration(${iter})" title="Continue from this checkpoint"
                         class="flex items-center gap-1 text-[10px] text-secondary-text/40 hover:text-primary transition-colors px-1.5 py-0.5">
@@ -4704,11 +5075,11 @@ function renderMissionReasoning(data) {
                     </button>
                     <button onclick="toggleThinkExpand(this)" title="Toggle thinking detail"
                         class="flex items-center gap-1 text-yellow-400/40 hover:text-yellow-400 transition-colors px-1 py-0.5">
-                        <span class="material-symbols-outlined text-[15px]">expand_more</span>
+                        <span class="material-symbols-outlined text-[15px]">${thinkIco}</span>
                     </button>
                 </div>
             </div>
-            <div class="think-expand overflow-hidden pl-4 pr-4" style="max-height:0;transition:max-height 0.3s ease-out;">
+            <div class="think-expand overflow-hidden pl-4 pr-4" style="max-height:${thinkMH};transition:max-height 0.25s ease-out;">
                 <div class="pb-3 border-t border-yellow-500/10 pt-2.5">
                     ${bodyHtml}
                 </div>
@@ -4723,9 +5094,9 @@ function renderMissionToolCall(data) {
     const sid        = _toolDetailStoreId++;
     _toolDetailStore.set(sid, data);
     appendMissionCard(`
-        <div class="group/card border-l-2 border-blue-500/50 bg-surface pl-4 pr-4 py-3 font-mono text-xs relative"
-             data-tool-id="${sid}" data-tool-title="TOOL CALL · ${tool}">
-            <div class="flex items-center gap-2 text-blue-400/80 font-bold text-[11px] uppercase tracking-widest mb-2">
+        <div class="group/card bg-surface pl-4 pr-4 py-3 font-mono text-xs relative"
+             data-tool-id="${sid}" data-tool-title="TOOL CALL · ${tool}" style="border:1px solid rgba(59,130,246,0.35);border-left:4px solid #3b82f6;">
+            <div class="flex items-center gap-2 text-blue-400 font-bold text-[11px] uppercase tracking-widest mb-2">
                 <span class="material-symbols-outlined text-[14px]">terminal</span>
                 TOOL CALL
             </div>
@@ -4744,15 +5115,16 @@ function renderMissionToolResult(data) {
     const tool    = _esc(data.tool || '');
     const success = data.success !== false;
     const output  = _esc(data.output || data.error || '');
-    const border  = success ? 'border-primary/50' : 'border-danger/50';
+    const borderHex2  = success ? '#ccff00' : '#ef4444';
+    const borderRgba2 = success ? 'rgba(204,255,0,0.3)' : 'rgba(239,68,68,0.35)';
     const color   = success ? 'text-primary' : 'text-danger';
     const icon    = success ? 'check_circle' : 'error';
     const label   = success ? 'OK' : 'FAILED';
     const sid     = _toolDetailStoreId++;
     _toolDetailStore.set(sid, data);
     appendMissionCard(`
-        <div class="group/card border-l-2 ${border} bg-surface pl-4 pr-4 py-3 font-mono text-xs relative"
-             data-tool-id="${sid}" data-tool-title="RESULT · ${tool}">
+        <div class="group/card bg-surface pl-4 pr-4 py-3 font-mono text-xs relative"
+             data-tool-id="${sid}" data-tool-title="RESULT · ${tool}" style="border:1px solid ${borderRgba2};border-left:4px solid ${borderHex2};">
             <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2 ${color} font-bold text-[11px] uppercase tracking-widest">
                     <span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1;">${icon}</span>
@@ -4770,25 +5142,46 @@ function renderMissionToolResult(data) {
     `);
 }
 
+function _parseMd(escapedText) {
+    // Convert **bold** to <strong> (applied after HTML escaping so < > are already safe)
+    return escapedText.replace(/\*\*(.+?)\*\*/g, '<strong class="text-secondary-text font-bold not-italic">$1</strong>');
+}
+
 function renderMissionReflection(data) {
-    const content = _esc(data.content || '');
-    if (!content) return;
-    appendMissionCard(`
-        <div class="border-l-2 border-purple-500/40 bg-surface pl-4 pr-4 py-2 font-mono text-xs">
-            <div class="flex items-center gap-2 text-purple-400/60 font-bold text-[11px] uppercase tracking-widest mb-1">
+    const rawContent = data.content || '';
+    if (!rawContent) return;
+    const content   = _parseMd(_esc(rawContent));
+    const autoOpen  = _feedFilterAutoExpand('reflecting');
+    const expandIco = autoOpen ? 'expand_less' : 'expand_more';
+    const card = appendMissionCard(`
+        <div class="think-card bg-surface font-mono text-xs" style="border:1px solid rgba(168,85,247,0.35);border-left:4px solid #a855f7;">
+            <div class="flex items-center gap-2 pl-4 pr-4 py-2.5 text-purple-400 font-bold text-[11px] uppercase tracking-widest">
                 <span class="material-symbols-outlined text-[14px]">lightbulb</span>
                 REFLECTION
+                <button onclick="toggleThinkExpand(this)" title="Toggle detail"
+                    class="ml-auto flex items-center gap-1 text-purple-400/40 hover:text-purple-400 transition-colors px-1 py-0.5">
+                    <span class="material-symbols-outlined text-[15px]">${expandIco}</span>
+                </button>
             </div>
-            <div class="text-secondary-text text-xs italic leading-relaxed whitespace-pre-wrap">${content}</div>
+            <div class="think-expand overflow-hidden pl-4 pr-4" style="max-height:0;transition:max-height 0.25s ease-out;">
+                <div class="pb-3 border-t border-purple-500/10 pt-2.5">
+                    <div class="text-secondary-text text-[11px] italic leading-relaxed whitespace-pre-wrap">${content}</div>
+                </div>
+            </div>
         </div>
     `);
+    // Auto-expand based on filter preference
+    if (card && autoOpen) {
+        const expand = card.querySelector('.think-expand');
+        if (expand) requestAnimationFrame(() => _expandEl(expand, 220));
+    }
 }
 
 function renderMissionSafetyBlock(data) {
     const reason = _esc(data.reason || '');
     const tool   = _esc(data.tool || '');
     appendMissionCard(`
-        <div class="border-l-2 border-orange-500/60 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
+        <div class="bg-surface pl-4 pr-4 py-3 font-mono text-xs" style="border:1px solid rgba(249,115,22,0.35);border-left:4px solid #f97316;">
             <div class="flex items-center gap-2 text-orange-400 font-bold text-[11px] uppercase tracking-widest mb-1">
                 <span class="material-symbols-outlined text-[14px]">shield</span>
                 SAFETY BLOCK${tool ? ' · ' + tool : ''}
@@ -4801,7 +5194,7 @@ function renderMissionSafetyBlock(data) {
 function renderMissionError(data) {
     const msg = _esc(data.error || 'Unknown error');
     appendMissionCard(`
-        <div class="border-l-2 border-danger/60 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
+        <div class="bg-surface pl-4 pr-4 py-3 font-mono text-xs" style="border:1px solid rgba(239,68,68,0.35);border-left:4px solid #ef4444;">
             <div class="flex items-center gap-2 text-danger font-bold text-[11px] uppercase tracking-widest mb-1">
                 <span class="material-symbols-outlined text-[14px]">error</span>
                 ERROR
@@ -4813,6 +5206,35 @@ function renderMissionError(data) {
 
 function renderMissionDone(data) {
     const ts = new Date().toLocaleTimeString();
+    // Build findings section if flags or objective result present
+    let findingsHtml = '';
+    const flags = Array.isArray(data.flags) ? data.flags : [];
+    const objective = data.objective_result || data.objective || '';
+    const findings  = Array.isArray(data.findings) ? data.findings : [];
+    if (flags.length > 0) {
+        findingsHtml += `<div class="mt-3 border-t border-primary/20 pt-3">
+            <div class="text-primary/70 text-[10px] uppercase tracking-widest font-bold mb-1.5">Flags Found</div>
+            ${flags.map(f => `<div class="flex items-center gap-2 mb-1">
+                <span class="material-symbols-outlined text-[12px] text-primary">flag</span>
+                <code class="text-primary text-[11px] break-all">${_esc(String(f))}</code>
+            </div>`).join('')}
+        </div>`;
+    }
+    if (findings.length > 0) {
+        findingsHtml += `<div class="mt-3 border-t border-primary/20 pt-3">
+            <div class="text-primary/70 text-[10px] uppercase tracking-widest font-bold mb-1.5">Key Findings</div>
+            ${findings.map(f => `<div class="text-secondary-text text-[11px] mb-0.5 flex gap-2">
+                <span class="text-primary shrink-0">›</span>
+                <span>${_esc(String(f))}</span>
+            </div>`).join('')}
+        </div>`;
+    }
+    if (objective) {
+        findingsHtml += `<div class="mt-3 border-t border-primary/20 pt-3">
+            <div class="text-primary/70 text-[10px] uppercase tracking-widest font-bold mb-1.5">Objective Result</div>
+            <div class="text-secondary-text text-[11px] italic leading-relaxed whitespace-pre-wrap">${_parseMd(_esc(objective))}</div>
+        </div>`;
+    }
     appendMissionCard(`
         <div class="border border-primary/30 bg-primary/5 px-4 py-4 font-mono text-xs">
             <div class="flex items-center gap-2 text-primary font-bold mb-3">
@@ -4833,7 +5255,8 @@ function renderMissionDone(data) {
                     <div class="text-secondary-text text-[10px] uppercase tracking-wider mt-0.5">Exploits</div>
                 </div>
             </div>
-            <div class="mt-3 text-center text-secondary-text text-[11px]">
+            ${findingsHtml}
+            <div class="mt-3 text-center text-secondary-text text-[11px] ${findingsHtml ? 'border-t border-primary/20 pt-3' : ''}">
                 Report available in the <span class="text-primary cursor-pointer hover:underline" onclick="switchView('report')">Report</span> tab
             </div>
         </div>
@@ -5177,7 +5600,10 @@ async function switchToSession(sessionId) {
                 const evData = evRes.ok ? await evRes.json() : null;
                 if (evData && evData.events && evData.events.length > 0) {
                     renderMissionStart(session.target, session.mode);
+                    agOnMissionStart({ target: session.target, mode: session.mode });
                     evData.events.forEach(ev => replaySessionEvent(ev.event_type, ev.data));
+                    // Always render graph after full replay and fit view
+                    setTimeout(function(){ _agRender(); setTimeout(agZoomFit, 100); }, 150);
                 } else {
                     renderHistoricalSession(session);
                 }
@@ -5206,21 +5632,31 @@ function replaySessionEvent(event, data) {
             _closeToolBatch();
             renderMissionReasoning(data);
             updatePhaseFromEvent(data);
+            agOnThinking(data);
             break;
         case 'tool_call':
             _openOrAddToToolBatch(data);
+            agOnToolCall(data);
             break;
         case 'tool_result':
             if (!_resolveToolBatchItem(data)) renderMissionToolResult(data);
+            agOnToolResult(data);
             break;
         case 'reflection':
             renderMissionReflection(data);
+            agOnReflection(data);
             break;
         case 'safety_block':
             renderMissionSafetyBlock(data);
             break;
         case 'error':
             renderMissionError(data);
+            break;
+        case 'parallel_start':
+            agOnParallelStart(data);
+            break;
+        case 'parallel_done':
+            agOnParallelDone(data);
             break;
         case 'phase_change':
         case 'observation':
@@ -5257,8 +5693,8 @@ function renderHistoricalSession(session) {
             `<div class="text-secondary-text">${_esc(String(r.ip || ''))}:${_esc(String(r.port || ''))} <span class="text-slate-300">${_esc(r.service || '')} ${_esc(r.version || '')}</span></div>`
         ).join('');
         appendMissionCard(`
-            <div class="border-l-2 border-primary/30 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
-                <div class="flex items-center gap-2 text-primary/60 font-bold text-[10px] uppercase tracking-widest mb-2">
+            <div class="bg-surface pl-4 pr-4 py-3 font-mono text-xs" style="border:1px solid rgba(204,255,0,0.25);border-left:4px solid #ccff00;">
+                <div class="flex items-center gap-2 text-primary font-bold text-[10px] uppercase tracking-widest mb-2">
                     <span class="material-symbols-outlined text-[13px]">search</span>
                     SCAN RESULTS · ${session.scan_results.length} ports found
                 </div>
@@ -5273,8 +5709,8 @@ function renderHistoricalSession(session) {
             `<div class="flex items-start gap-2"><span class="text-danger shrink-0">▸</span><span class="text-slate-300">${_esc(v.title || v.description || String(v).slice(0, 100))}</span></div>`
         ).join('');
         appendMissionCard(`
-            <div class="border-l-2 border-danger/40 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
-                <div class="flex items-center gap-2 text-danger/80 font-bold text-[10px] uppercase tracking-widest mb-2">
+            <div class="bg-surface pl-4 pr-4 py-3 font-mono text-xs" style="border:1px solid rgba(239,68,68,0.35);border-left:4px solid #ef4444;">
+                <div class="flex items-center gap-2 text-danger font-bold text-[10px] uppercase tracking-widest mb-2">
                     <span class="material-symbols-outlined text-[13px]">bug_report</span>
                     VULNERABILITIES · ${session.vulnerabilities.length} found
                 </div>
@@ -5288,8 +5724,8 @@ function renderHistoricalSession(session) {
             `<div class="text-${e.success ? 'primary' : 'danger'}">${e.success ? '✓' : '✗'} ${_esc(e.module || '')} → ${_esc(e.target_ip || '')}</div>`
         ).join('');
         appendMissionCard(`
-            <div class="border-l-2 border-orange-500/40 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
-                <div class="flex items-center gap-2 text-orange-400/80 font-bold text-[10px] uppercase tracking-widest mb-2">
+            <div class="bg-surface pl-4 pr-4 py-3 font-mono text-xs" style="border:1px solid rgba(249,115,22,0.35);border-left:4px solid #f97316;">
+                <div class="flex items-center gap-2 text-orange-400 font-bold text-[10px] uppercase tracking-widest mb-2">
                     <span class="material-symbols-outlined text-[13px]">bolt</span>
                     EXPLOIT RESULTS · ${session.exploit_results.length} attempts
                 </div>
@@ -5300,7 +5736,7 @@ function renderHistoricalSession(session) {
 
     if (!session.scan_results?.length && !session.vulnerabilities?.length && !session.exploit_results?.length) {
         appendMissionCard(`
-            <div class="border-l-2 border-border-color/40 bg-surface pl-4 pr-4 py-3 font-mono text-xs">
+            <div class="bg-surface pl-4 pr-4 py-3 font-mono text-xs" style="border:1px solid rgba(255,255,255,0.1);border-left:4px solid rgba(255,255,255,0.2);">
                 <div class="text-secondary-text text-[11px]">No detailed findings stored for this session.</div>
             </div>
         `);
@@ -6970,6 +7406,7 @@ function _onReverseShellReceived(shellId, remoteAddr) {
     badge.dataset.count = currentCount;
     badge.textContent = currentCount;
     badge.classList.remove('hidden');
+    setStatValue('stat-shells', currentCount);
     if (emptyMsg) emptyMsg.classList.add('hidden');
 
     const subTab = document.createElement('button');
@@ -7149,4 +7586,550 @@ function _shellPrint(htmlContent) {
     d.innerHTML = htmlContent;
     out.appendChild(d);
     out.scrollTop = out.scrollHeight;
+}
+
+
+
+// ─── Attack Graph View v2 ──────────────────────────────────────────────────────
+
+let _agView           = 'feed';
+let _agNodes          = [];   // {id,type,label,detail,parentId,depth,x,y,_expanded,_children}
+let _agEdges          = [];   // {from,to}
+let _agNodeSeq        = 0;
+let _agD3Zoom         = null;
+let _agLastThinkId    = null;
+let _agLastToolId     = null;
+let _agParallelGrpId  = null;   // id of current parallel group node
+let _agParallelActive = false;
+
+// ── Node style registry ────────────────────────────────────────────────────────
+const _AG = {
+    aegis:      { color:'#ccff00', bg:'#0d1a00', bgL:'#f0ffd0', icon:'radar',          r:32, stroke:2.5 },
+    target:     { color:'#ef4444', bg:'#1a0000', bgL:'#fff0f0', icon:'computer',        r:28, stroke:1.5 },
+    thinking:   { color:'#eab308', bg:'#1a1100', bgL:'#fffbe8', icon:'psychology',      r:26, stroke:1.5 },
+    reflecting: { color:'#a855f7', bg:'#0d0018', bgL:'#faf0ff', icon:'lightbulb',       r:26, stroke:1.5 },
+    tool_nmap:  { color:'#3b82f6', bg:'#00102a', bgL:'#eff6ff', icon:'wifi_find',       r:28, stroke:1.5 },
+    tool_msf:   { color:'#ef4444', bg:'#1a0000', bgL:'#fff0f0', icon:'rocket_launch',   r:28, stroke:1.5 },
+    tool_bash:  { color:'#22c55e', bg:'#001a08', bgL:'#f0fff4', icon:'terminal',        r:28, stroke:1.5 },
+    tool_ssh:   { color:'#06b6d4', bg:'#001018', bgL:'#ecfeff', icon:'key',             r:28, stroke:1.5 },
+    tool_spy:   { color:'#f97316', bg:'#1a0800', bgL:'#fff7ed', icon:'manage_search',   r:28, stroke:1.5 },
+    tool_other: { color:'#60a5fa', bg:'#001020', bgL:'#eff6ff', icon:'terminal',        r:28, stroke:1.5 },
+    parallel:   { color:'#f97316', bg:'#1a0800', bgL:'#fff7ed', icon:'bolt',            r:30, stroke:2 },
+    result_ok:  { color:'#ccff00', bg:'#0a1400', bgL:'#f7ffde', icon:'check_circle',    r:20, stroke:1 },
+    result_fail:{ color:'#ef4444', bg:'#1a0000', bgL:'#fff0f0', icon:'error',           r:20, stroke:1 },
+    reflection: { color:'#a855f7', bg:'#0d0018', bgL:'#faf0ff', icon:'lightbulb',       r:26, stroke:1.5 },
+    done:       { color:'#ccff00', bg:'#0a1400', bgL:'#f7ffde', icon:'flag',            r:32, stroke:2.5 },
+    error:      { color:'#ef4444', bg:'#1a0000', bgL:'#fff0f0', icon:'error',           r:26, stroke:1.5 },
+};
+
+function _agS(type) { return _AG[type] || _AG.tool_other; }
+function _agIsLight() { return document.documentElement.classList.contains('light'); }
+function _agBg(type) { return _agIsLight() ? _agS(type).bgL : _agS(type).bg; }
+function _agSvgBg() { return _agIsLight() ? '#f7f7f7' : '#030303'; }
+function _agEdgeColor(main) { return _agIsLight() ? (main ? '#ccc' : '#ddd') : (main ? '#1e1e1e' : '#111'); }
+
+function _agToolType(name) {
+    const n = (name || '').toLowerCase();
+    if (n.includes('nmap'))                              return 'tool_nmap';
+    if (n.includes('msf') || n.includes('metasploit'))  return 'tool_msf';
+    if (n.includes('bash') || n === 'exec' || n === 'run_command' || n === 'shell') return 'tool_bash';
+    if (n.includes('ssh'))                               return 'tool_ssh';
+    if (n.includes('searchsploit') || n.includes('exploit_db')) return 'tool_spy';
+    return 'tool_other';
+}
+
+// ── Node management ────────────────────────────────────────────────────────────
+
+function _agAddNode(type, label, detail, parentId) {
+    detail   = detail   !== undefined ? detail   : {};
+    parentId = parentId !== undefined ? parentId : null;
+    const id = ++_agNodeSeq;
+    const par = _agNodes.find(function(n){ return n.id === parentId; });
+    const depth = par ? par.depth + 1 : (_agNodes.length > 0 ? _agNodes[_agNodes.length-1].depth + 1 : 0);
+    _agNodes.push({ id:id, type:type, label:label, detail:detail, parentId:parentId,
+                    depth:depth, x:0, y:0, _expanded:false, _children:[] });
+    if (parentId !== null) {
+        _agEdges.push({ from:parentId, to:id });
+        if (par) par._children.push(id);
+    }
+    if (_agView === 'graph') _agScheduleRender();
+    return id;
+}
+
+function _agReset() {
+    _agNodes=[]; _agEdges=[]; _agNodeSeq=0;
+    _agLastThinkId=null; _agLastToolId=null;
+    _agParallelGrpId=null; _agParallelActive=false;
+    const cnt = document.getElementById('ag-node-count');
+    if (cnt) cnt.textContent = '';
+    if (_agView === 'graph') _agRender();
+}
+
+let _agRenderTimer = null;
+function _agScheduleRender() {
+    if (_agRenderTimer) clearTimeout(_agRenderTimer);
+    _agRenderTimer = setTimeout(_agRender, 60);
+}
+
+// ── View switch ────────────────────────────────────────────────────────────────
+
+function switchAgentView(v) {
+    _agView = v;
+    try { localStorage.setItem('agView', v); } catch(e) {}
+    const feedArea  = document.getElementById('agent-scroll-area');
+    const minimap   = document.getElementById('ag-minimap-col');
+    const graphView = document.getElementById('ag-graph-view');
+    const btnFeed   = document.getElementById('ag-view-btn-feed');
+    const btnGraph  = document.getElementById('ag-view-btn-graph');
+
+    const isLight = _agIsLight();
+    const limePrimary = isLight ? '#4a7c00' : '#ccff00';
+    const activeS   = 'border-color:'+limePrimary+';color:'+limePrimary+';background:'+limePrimary+'18;';
+    const inactiveS = 'border-color:#333;color:#444;background:transparent;';
+
+    if (v === 'graph') {
+        if (feedArea)  feedArea.style.display  = 'none';
+        if (minimap)   minimap.style.display   = 'none';
+        if (graphView) { graphView.style.display = 'flex'; graphView.style.flex = '1'; }
+        if (btnFeed)   btnFeed.setAttribute('style',  inactiveS);
+        if (btnGraph)  btnGraph.setAttribute('style', activeS);
+        // Sync SVG background
+        const svgEl = document.getElementById('ag-graph-svg');
+        if (svgEl) svgEl.style.background = _agSvgBg();
+        _agRender();
+    } else {
+        if (feedArea)  feedArea.style.display  = '';
+        if (minimap)   minimap.style.display   = 'flex';
+        if (graphView) { graphView.style.display = 'none'; }
+        if (btnFeed)   btnFeed.setAttribute('style',  activeS);
+        if (btnGraph)  btnGraph.setAttribute('style', inactiveS);
+    }
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+
+function _agComputeLayout() {
+    if (_agNodes.length === 0) return;
+    const wrap = document.getElementById('ag-svg-wrap');
+    const W  = wrap ? wrap.clientWidth  : 800;
+    const cx = W / 2;
+    const YSTEP   = 160;
+    const XBRANCH = 230;
+    const XPAR    = 180;   // horizontal spread for parallel children
+    let chainY = 100;
+
+    // Categorize nodes
+    _agNodes.forEach(function(node) {
+        const isBranch   = (node.type === 'result_ok' || node.type === 'result_fail');
+        const isParChild  = _agParentType(node) === 'parallel';
+
+        if (isParChild && !isBranch) {
+            // Parallel children: positioned when parent expands
+            const grp = _agNodes.find(function(n){ return n.id === node.parentId; });
+            if (grp && grp._expanded) {
+                const siblings = grp._children.filter(function(cid){
+                    const c = _agNodes.find(function(n){ return n.id === cid; });
+                    return c && c.type !== 'result_ok' && c.type !== 'result_fail';
+                });
+                const idx   = siblings.indexOf(node.id);
+                const total = siblings.length;
+                const spread = Math.min(XPAR * (total - 1), 600);
+                node.x = grp.x + (idx - (total-1)/2) * (total > 1 ? spread/(total-1) : 0);
+                node.y = grp.y + YSTEP;
+                node._visible = true;
+            } else {
+                node.x = _agNodes.find(function(n){ return n.id === node.parentId; })?.x || cx;
+                node.y = _agNodes.find(function(n){ return n.id === node.parentId; })?.y || chainY;
+                node._visible = false;
+            }
+        } else if (isBranch) {
+            const parent = _agNodes.find(function(n){ return n.id === node.parentId; });
+            node.x = parent ? parent.x + XBRANCH : cx + XBRANCH;
+            node.y = parent ? parent.y : chainY;
+            node._visible = true;
+        } else {
+            node.x = cx + (node.depth % 2 === 0 ? -20 : 20);
+            node.y = chainY;
+            node._visible = true;
+            chainY += YSTEP;
+            // Leave extra room if this is an expanded parallel group
+            if (node.type === 'parallel' && node._expanded) {
+                chainY += YSTEP;
+            }
+        }
+    });
+}
+
+function _agParentType(node) {
+    if (!node.parentId) return null;
+    const par = _agNodes.find(function(n){ return n.id === node.parentId; });
+    return par ? par.type : null;
+}
+
+// ── D3 Render ─────────────────────────────────────────────────────────────────
+
+function _agRender() {
+    const svgEl = document.getElementById('ag-graph-svg');
+    if (!svgEl || typeof d3 === 'undefined') return;
+    const svg = d3.select(svgEl);
+    const isLight = _agIsLight();
+
+    // SVG background
+    svgEl.style.background = _agSvgBg();
+
+    // Init zoom
+    if (!_agD3Zoom) {
+        _agD3Zoom = d3.zoom().scaleExtent([0.05, 6]).on('zoom', function(e) {
+            svg.select('.ag-root').attr('transform', e.transform);
+        });
+        svg.call(_agD3Zoom);
+        svg.on('click', function(ev) {
+            if (ev.target === svgEl) agCloseDetail();
+        });
+    }
+
+    // Defs
+    let defs = svg.select('defs');
+    if (defs.empty()) defs = svg.append('defs');
+    // Rebuild markers (color-sensitive)
+    defs.selectAll('marker').remove();
+    var markerDefs = [
+        ['ag-arr-main',  isLight ? '#bbb' : '#252525'],
+        ['ag-arr-ok',    isLight ? 'rgba(74,124,0,0.6)'    : 'rgba(204,255,0,0.5)'],
+        ['ag-arr-fail',  isLight ? 'rgba(220,38,38,0.6)'   : 'rgba(239,68,68,0.5)'],
+        ['ag-arr-par',   isLight ? 'rgba(234,88,12,0.6)'   : 'rgba(249,115,22,0.5)'],
+    ];
+    markerDefs.forEach(function(pair) {
+        defs.append('marker').attr('id',pair[0]).attr('viewBox','0 -4 8 8')
+            .attr('refX',15).attr('refY',0).attr('markerWidth',5).attr('markerHeight',5).attr('orient','auto')
+            .append('path').attr('d','M0,-4L8,0L0,4').attr('fill',pair[1]);
+    });
+
+    // Root group
+    let root = svg.select('.ag-root');
+    if (root.empty()) {
+        root = svg.append('g').attr('class','ag-root');
+        root.append('g').attr('class','ag-edge-layer');
+        root.append('g').attr('class','ag-node-layer');
+    }
+
+    if (_agNodes.length === 0) { root.selectAll('*').remove(); return; }
+    _agComputeLayout();
+
+    // Node count badge
+    const cnt = document.getElementById('ag-node-count');
+    if (cnt) cnt.textContent = _agNodes.length + ' nodes · ' + _agEdges.length + ' edges';
+
+    // ── Edges ──
+    var visibleEdges = _agEdges.filter(function(e) {
+        var tgt = _agNodes.find(function(n){ return n.id === e.to; });
+        return tgt && tgt._visible !== false;
+    });
+    var edgeSel = root.select('.ag-edge-layer').selectAll('.ag-edge')
+        .data(visibleEdges, function(d){ return d.from+'-'+d.to; });
+    edgeSel.exit().transition().duration(200).attr('opacity',0).remove();
+    var edgeEnter = edgeSel.enter().append('path').attr('class','ag-edge')
+        .attr('fill','none').attr('opacity',0);
+    edgeEnter.transition().duration(300).attr('opacity',1);
+    edgeEnter.merge(edgeSel).attr('stroke-width',1.5).each(function(d) {
+        var src = _agNodes.find(function(n){ return n.id === d.from; });
+        var tgt = _agNodes.find(function(n){ return n.id === d.to; });
+        if (!src || !tgt) return;
+        var isOk     = tgt.type === 'result_ok';
+        var isFail   = tgt.type === 'result_fail';
+        var isPar    = tgt.type.startsWith('tool_') && src.type === 'parallel';
+        var r1 = _agS(src.type).r, r2 = _agS(tgt.type).r;
+        var dx = tgt.x-src.x, dy = tgt.y-src.y;
+        var len = Math.sqrt(dx*dx+dy*dy)||1;
+        var ux=dx/len, uy=dy/len;
+        var sx=src.x+ux*r1, sy=src.y+uy*r1;
+        var ex=tgt.x-ux*(r2+2), ey=tgt.y-uy*(r2+2);
+        var qx=(sx+ex)/2+(isPar?0:isOk||isFail?0:-20), qy=(sy+ey)/2;
+        var stroke = isPar  ? (isLight?'rgba(234,88,12,.35)' :'rgba(249,115,22,.3)') :
+                     isOk   ? (isLight?'rgba(74,124,0,.4)'   :'rgba(204,255,0,.25)') :
+                     isFail ? (isLight?'rgba(220,38,38,.4)'  :'rgba(239,68,68,.25)') :
+                               (isLight?'#ccc':'#1c1c1c');
+        var dash = (isPar||isOk||isFail)?'5,3':'3,5';
+        var arr  = isPar  ? 'url(#ag-arr-par)' :
+                   isOk   ? 'url(#ag-arr-ok)'  :
+                   isFail ? 'url(#ag-arr-fail)' : 'url(#ag-arr-main)';
+        d3.select(this)
+            .attr('d','M'+sx+','+sy+' Q'+qx+','+qy+' '+ex+','+ey)
+            .attr('stroke',stroke).attr('stroke-dasharray',dash).attr('marker-end',arr);
+    });
+
+    // ── Nodes ──
+    var visibleNodes = _agNodes.filter(function(n){ return n._visible !== false; });
+    var nodeSel = root.select('.ag-node-layer').selectAll('.ag-node')
+        .data(visibleNodes, function(d){ return d.id; });
+    nodeSel.exit().transition().duration(200).attr('opacity',0).remove();
+    var nodeEnter = nodeSel.enter().append('g').attr('class','ag-node').style('cursor','pointer')
+        .attr('opacity',0)
+        .attr('transform', function(d){ return 'translate('+d.x+','+d.y+')'; });
+    nodeEnter.transition().duration(350).attr('opacity',1);
+
+    // Glow
+    nodeEnter.append('circle').attr('class','ag-glow').attr('fill','none').attr('stroke-width',1);
+    // Body
+    nodeEnter.append('circle').attr('class','ag-circle');
+    // Icon
+    nodeEnter.append('text').attr('class','ag-icon')
+        .attr('text-anchor','middle').attr('dominant-baseline','central')
+        .style('font-family','Material Symbols Outlined')
+        .style('font-variation-settings',"'FILL' 1,'wght' 300")
+        .style('pointer-events','none');
+    // Label
+    nodeEnter.append('text').attr('class','ag-label')
+        .attr('text-anchor','middle')
+        .style('font-family','JetBrains Mono, monospace')
+        .style('text-transform','uppercase').style('letter-spacing','0.07em')
+        .style('pointer-events','none');
+    // Expand hint for parallel nodes
+    nodeEnter.append('text').attr('class','ag-expand-hint')
+        .attr('text-anchor','middle')
+        .style('font-family','Material Symbols Outlined')
+        .style('font-variation-settings',"'FILL' 1")
+        .style('pointer-events','none')
+        .attr('opacity',0.5);
+
+    nodeEnter.on('click', function(ev, d) {
+        ev.stopPropagation();
+        if (d.type === 'parallel') { _agToggleParallel(d); return; }
+        agShowDetail(d);
+    });
+
+    var nodeMerge = nodeEnter.merge(nodeSel);
+    nodeMerge.transition().duration(350)
+        .attr('transform', function(d){ return 'translate('+d.x+','+d.y+')'; })
+        .attr('opacity', function(d){ return d._visible===false ? 0 : 1; });
+
+    nodeMerge.select('.ag-glow')
+        .attr('r', function(d){ return _agS(d.type).r + 14; })
+        .attr('stroke', function(d){ return _agS(d.type).color; })
+        .attr('opacity', isLight ? 0.08 : 0.1);
+    nodeMerge.select('.ag-circle')
+        .attr('r', function(d){ return _agS(d.type).r; })
+        .attr('fill',         function(d){ return _agBg(d.type); })
+        .attr('stroke',       function(d){ return _agS(d.type).color; })
+        .attr('stroke-width', function(d){ return _agS(d.type).stroke; });
+    nodeMerge.select('.ag-icon')
+        .attr('font-size', function(d){ return _agS(d.type).r * 0.7; })
+        .attr('fill',      function(d){ return _agS(d.type).color; })
+        .text(function(d){ return _agS(d.type).icon; });
+    nodeMerge.select('.ag-label')
+        .attr('y',         function(d){ return _agS(d.type).r + 15; })
+        .attr('font-size', 9)
+        .attr('fill',      function(d){ return _agS(d.type).color; })
+        .attr('opacity',   isLight ? 0.8 : 0.7)
+        .text(function(d){ return d.label.length > 12 ? d.label.slice(0,11)+'...' : d.label; });
+    nodeMerge.select('.ag-expand-hint')
+        .attr('y',         function(d){ return _agS(d.type).r + 27; })
+        .attr('font-size', 10)
+        .attr('fill',      function(d){ return _agS(d.type).color; })
+        .attr('opacity',   function(d){ return d.type==='parallel' ? 0.45 : 0; })
+        .text(function(d){ return d.type==='parallel' ? (d._expanded ? 'unfold_less' : 'unfold_more') : ''; });
+
+    // Hover effects
+    nodeMerge
+        .on('mouseenter', function(ev, d) {
+            d3.select(this).select('.ag-glow').transition().duration(120)
+                .attr('opacity', isLight ? 0.22 : 0.28);
+            d3.select(this).select('.ag-circle').transition().duration(120)
+                .attr('stroke-width', _agS(d.type).stroke + 1);
+        })
+        .on('mouseleave', function(ev, d) {
+            d3.select(this).select('.ag-glow').transition().duration(120)
+                .attr('opacity', isLight ? 0.08 : 0.1);
+            d3.select(this).select('.ag-circle').transition().duration(120)
+                .attr('stroke-width', _agS(d.type).stroke);
+        });
+
+    if (_agNodes.filter(function(n){ return n._visible!==false; }).length <= 3) {
+        setTimeout(agZoomFit, 250);
+    }
+}
+
+// ── Parallel expand/collapse ──────────────────────────────────────────────────
+
+function _agToggleParallel(grpNode) {
+    grpNode._expanded = !grpNode._expanded;
+    _agRender();
+    if (grpNode._expanded) setTimeout(agZoomFit, 450);
+    agShowDetail(grpNode);
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+
+function agZoom(factor) {
+    if (!_agD3Zoom) return;
+    d3.select('#ag-graph-svg').transition().duration(220).call(_agD3Zoom.scaleBy, factor);
+}
+
+function agZoomFit() {
+    var svgEl = document.getElementById('ag-graph-svg');
+    if (!svgEl || !_agD3Zoom || _agNodes.length === 0) return;
+    var vis = _agNodes.filter(function(n){ return n._visible !== false; });
+    if (vis.length === 0) return;
+    var W = svgEl.clientWidth || 800, H = svgEl.clientHeight || 600;
+    var xs = vis.map(function(n){ return n.x; });
+    var ys = vis.map(function(n){ return n.y; });
+    var x0=Math.min.apply(null,xs)-80, x1=Math.max.apply(null,xs)+80;
+    var y0=Math.min.apply(null,ys)-80, y1=Math.max.apply(null,ys)+80;
+    var k = Math.min(0.92, Math.min(W/((x1-x0)||1), H/((y1-y0)||1)));
+    var tx = W/2 - k*(x0+x1)/2, ty = H/2 - k*(y0+y1)/2;
+    d3.select(svgEl).transition().duration(380)
+        .call(_agD3Zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(k));
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────────────
+
+function agShowDetail(node) {
+    var panel   = document.getElementById('ag-detail-panel');
+    var titleEl = document.getElementById('ag-detail-title');
+    var iconEl  = document.getElementById('ag-detail-icon');
+    var bodyEl  = document.getElementById('ag-detail-body');
+    if (!panel) return;
+
+    var st = _agS(node.type);
+    var isLight = _agIsLight();
+    if (titleEl) { titleEl.textContent = node.label; titleEl.style.color = isLight ? '#333' : '#aaa'; }
+    if (iconEl)  { iconEl.textContent = st.icon; iconEl.style.color = st.color; }
+
+    var d   = node.detail || {};
+    var html = '<span class="ag-type-badge" style="border:1px solid '+st.color+'44;color:'+st.color+';">'
+             + node.type.replace(/_/g,' ') + '</span><br>';
+
+    if (node.type === 'parallel') {
+        var toolCount = node._children.length;
+        html += '<div style="margin-bottom:10px;font-size:10px;color:'+(isLight?'#555':'#888')+';">'
+              + toolCount + ' tools ' + (node._expanded ? '(click to collapse)' : '(click node to expand)') + '</div>';
+        node._children.forEach(function(cid) {
+            var c = _agNodes.find(function(n){ return n.id === cid; });
+            if (c) {
+                var cs = _agS(c.type);
+                html += '<div style="margin-bottom:4px;display:flex;align-items:center;gap:6px;">'
+                      + '<div style="width:8px;height:8px;border-radius:50%;background:'+cs.color+';flex-shrink:0;"></div>'
+                      + '<span style="font-size:10px;color:'+(isLight?'#444':'#888')+';">'+_esc(c.label)+'</span></div>';
+            }
+        });
+    }
+
+    if (d.thought)   html += _agSec('Thought',     _esc(d.thought), isLight);
+    if (d.reasoning) html += _agSec('Reasoning',   _esc(d.reasoning), isLight);
+    if (d.action)    html += '<div style="color:'+st.color+';font-weight:700;margin:6px 0 10px;font-size:11px;">&#8594; '+_esc(d.action)+'</div>';
+    if (d.tool)      html += _agKV('Tool',   _esc(d.tool), isLight);
+    if (d.target)    html += _agKV('Target', _esc(d.target), isLight);
+    if (d.mode)      html += _agKV('Mode',   _esc(d.mode), isLight);
+    if (d.params && Object.keys(d.params).length > 0)
+                     html += _agSec('Parameters', _esc(JSON.stringify(d.params, null, 2)), isLight);
+    if (d.output)    html += _agSec('Output',    _esc(String(d.output).slice(0, 3000)), isLight);
+    if (d.error)     html += _agSec('Error',     _esc(String(d.error)), isLight);
+    if (d.content)   html += _agSec('Content',   _esc(d.content), isLight);
+
+    if (bodyEl) bodyEl.innerHTML = html || '<span style="color:#444;">No details</span>';
+    panel.style.width = '310px';
+}
+
+function _agKV(title, val, isLight) {
+    return '<div style="margin-bottom:8px;">'
+         + '<div class="ag-detail-section-title">'+title+'</div>'
+         + '<span style="font-size:11px;color:'+(isLight?'#333':'#bbb')+';">'+val+'</span></div>';
+}
+
+function _agSec(title, content, isLight) {
+    return '<div style="margin-bottom:10px;">'
+         + '<div class="ag-detail-section-title">'+title+'</div>'
+         + '<pre class="ag-detail-pre">'+content+'</pre></div>';
+}
+
+function agCloseDetail() {
+    var panel = document.getElementById('ag-detail-panel');
+    if (panel) panel.style.width = '0';
+}
+
+// ── Injection from graph view ─────────────────────────────────────────────────
+
+function agInject() {
+    var inp = document.getElementById('ag-inject-input');
+    if (!inp || !inp.value.trim()) return;
+    var text = inp.value.trim();
+    inp.value = '';
+    if (!activeMissionId) { showToast('No active mission'); return; }
+    fetch('/api/v1/sessions/' + activeMissionId + '/inject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+    }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.ok) showToast('Instruction injected into agent');
+        else showToast('Agent not running or session not found');
+    }).catch(function(e){ showToast('Error: ' + e.message); });
+}
+
+// ── Event hooks ───────────────────────────────────────────────────────────────
+
+function agOnMissionStart(data) {
+    _agReset();
+    var aegisId = _agAddNode('aegis', 'AEGIS', {}, null);
+    _agAddNode('target', data.target || 'TARGET', { target:data.target, mode:data.mode }, aegisId);
+}
+
+function agOnThinking(data) {
+    var tgt = _agNodes.find(function(n){ return n.type === 'target'; });
+    var parentId = _agLastToolId !== null ? _agLastToolId : (tgt ? tgt.id : null);
+    var label = data.action ? data.action.slice(0,14) : 'THINKING';
+    _agLastThinkId = _agAddNode('thinking', label, data, parentId);
+    _agLastToolId  = null;
+    _agParallelGrpId = null;
+}
+
+function agOnToolCall(data) {
+    var type = _agToolType(data.tool || '');
+    var label = (data.tool || 'TOOL').toUpperCase().slice(0, 12);
+    var parentId;
+    if (_agParallelActive && _agParallelGrpId !== null) {
+        parentId = _agParallelGrpId;
+    } else {
+        var tgt = _agNodes.find(function(n){ return n.type === 'target'; });
+        parentId = _agLastThinkId !== null ? _agLastThinkId : (tgt ? tgt.id : null);
+    }
+    _agLastToolId = _agAddNode(type, label, data, parentId);
+}
+
+function agOnToolResult(data) {
+    if (_agLastToolId === null) return;
+    var type  = data.success !== false ? 'result_ok' : 'result_fail';
+    var label = data.success !== false ? 'OK' : 'FAILED';
+    _agAddNode(type, label, data, _agLastToolId);
+}
+
+function agOnParallelStart(data) {
+    var tgt = _agNodes.find(function(n){ return n.type === 'target'; });
+    var parentId = _agLastThinkId !== null ? _agLastThinkId : (tgt ? tgt.id : null);
+    var count = data.count || (data.tools ? data.tools.length : '?');
+    var label = 'PAR x' + count;
+    _agParallelGrpId  = _agAddNode('parallel', label, data, parentId);
+    _agParallelActive = true;
+    _agLastToolId     = null;
+}
+
+function agOnParallelDone(data) {
+    _agParallelActive = false;
+    // Make the parallel group node the new "last tool" so next thinking connects to it
+    if (_agParallelGrpId !== null) _agLastToolId = _agParallelGrpId;
+    _agParallelGrpId = null;
+    if (_agView === 'graph') _agRender();
+}
+
+function agOnReflection(data) {
+    var tgt = _agNodes.find(function(n){ return n.type === 'target'; });
+    var parentId = _agLastToolId !== null ? _agLastToolId
+                 : _agLastThinkId !== null ? _agLastThinkId
+                 : (tgt ? tgt.id : null);
+    _agAddNode('reflection', 'REFLECTION', data, parentId);
+}
+
+function agOnDone(data) {
+    var lastId = _agNodes.length > 0 ? _agNodes[_agNodes.length-1].id : null;
+    _agAddNode('done', 'DONE', data, lastId);
+    if (_agView === 'graph') setTimeout(agZoomFit, 700);
 }
